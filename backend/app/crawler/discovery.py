@@ -16,7 +16,13 @@ from app import models
 
 logger = logging.getLogger(__name__)
 
-_anthropic = anthropic.Anthropic()
+_anthropic_client = None
+
+def _client():
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic()
+    return _anthropic_client
 
 # Known directory pages that list orchestra member organizations
 DIRECTORY_SOURCES = [
@@ -83,7 +89,7 @@ def _discover_from_source(source: dict) -> list[dict]:
     text = _fetch_text(source["url"])
     if not text:
         return []
-    message = _anthropic.messages.create(
+    message = _client().messages.create(
         model="claude-sonnet-4-6",
         max_tokens=4096,
         messages=[{

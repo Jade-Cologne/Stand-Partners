@@ -18,7 +18,13 @@ from app import models
 
 logger = logging.getLogger(__name__)
 
-_anthropic = anthropic.Anthropic()
+_anthropic_client = None
+
+def _client():
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic()
+    return _anthropic_client
 
 EXTRACTION_PROMPT = """\
 You are a data extraction assistant for an orchestral audition database.
@@ -124,7 +130,7 @@ def _find_audition_page(website: str) -> Optional[str]:
 
 def _parse_page(url: str, text: str) -> dict:
     """Send page text to Claude and get structured audition data."""
-    message = _anthropic.messages.create(
+    message = _client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=4096,
         messages=[{
@@ -140,7 +146,7 @@ def _normalize_excerpts(raw_text: str) -> list[dict]:
     """Ask Claude to parse raw excerpt text into structured excerpt data."""
     if not raw_text or not raw_text.strip():
         return []
-    message = _anthropic.messages.create(
+    message = _client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2048,
         messages=[{
