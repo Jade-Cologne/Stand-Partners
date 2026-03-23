@@ -13,11 +13,18 @@ from app.crawler.scheduler import start_scheduler, stop_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables if they don't exist (Alembic handles migrations in prod)
+    # Create tables if they don't exist
     models.Base.metadata.create_all(bind=engine)
 
     # Ensure upload directory exists
     os.makedirs("uploads/excerpts", exist_ok=True)
+
+    # Seed starter orchestras (no-op if already seeded)
+    try:
+        from app.seed.orchestras import seed
+        seed()
+    except Exception as e:
+        print(f"Seed warning (non-fatal): {e}")
 
     # Start background crawler scheduler
     start_scheduler()

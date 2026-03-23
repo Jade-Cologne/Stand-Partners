@@ -16,6 +16,7 @@ if config.config_file_name is not None:
 
 # Override sqlalchemy.url from environment so we never hardcode credentials
 database_url = os.getenv("DATABASE_URL", "postgresql://standpartners:standpartners@localhost:5432/standpartners")
+database_url = database_url.replace("postgres://", "postgresql://", 1)
 config.set_main_option("sqlalchemy.url", database_url)
 
 from app.models import Base  # noqa: E402
