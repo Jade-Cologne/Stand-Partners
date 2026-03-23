@@ -13,24 +13,33 @@ def _require_key(x_admin_key: str = Header(...)):
 
 
 @router.post("/crawl")
-def trigger_crawl(x_admin_key: str = Header(...)):
+def trigger_crawl(x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
     from app.crawler.parser import run_daily_crawl
+    if sync:
+        run_daily_crawl()
+        return {"status": "crawl complete"}
     Thread(target=run_daily_crawl, daemon=True).start()
     return {"status": "crawl started"}
 
 
 @router.post("/discover")
-def trigger_discovery(x_admin_key: str = Header(...)):
+def trigger_discovery(x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
     from app.crawler.discovery import run_weekly_discovery
+    if sync:
+        run_weekly_discovery()
+        return {"status": "discovery complete"}
     Thread(target=run_weekly_discovery, daemon=True).start()
     return {"status": "discovery started"}
 
 
 @router.post("/discover-claude")
-def trigger_claude_discovery(x_admin_key: str = Header(...)):
+def trigger_claude_discovery(x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
     from app.crawler.discovery import run_claude_state_discovery
+    if sync:
+        run_claude_state_discovery()
+        return {"status": "claude discovery complete"}
     Thread(target=run_claude_state_discovery, daemon=True).start()
     return {"status": "claude state-by-state discovery started"}
