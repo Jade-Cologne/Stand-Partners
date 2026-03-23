@@ -186,31 +186,32 @@ def _save_orchestras(orchestras: list[dict], existing_names: set, db) -> int:
 
 def run_claude_state_discovery():
     """Query Claude for orchestras in each US state and add new ones to the DB."""
-    logger.info("Starting Claude state-by-state discovery...")
+    print("Starting Claude state-by-state discovery...")
     db = SessionLocal()
     try:
         existing_names = {o.name.lower() for o in db.query(models.Orchestra).all()}
         total_added = 0
 
         for state in US_STATES:
-            logger.info(f"Discovering orchestras in {state}...")
+            print(f"[discover-claude] {state}...")
             orchestras = _discover_state_via_claude(state)
             added = _save_orchestras(orchestras, existing_names, db)
             db.commit()
-            logger.info(f"  {state}: {len(orchestras)} found, {added} new")
+            total_added += added
+            print(f"[discover-claude] {state}: {len(orchestras)} found, {added} new")
             time.sleep(1)
 
-        logger.info(f"Claude discovery complete: {total_added} new orchestras added.")
+        print(f"Claude discovery complete: {total_added} new orchestras added.")
     except Exception as e:
         db.rollback()
-        logger.error(f"Claude discovery error: {e}")
+        print(f"Claude discovery error: {e}")
     finally:
         db.close()
 
 
 def run_weekly_discovery():
     """Entry point for the APScheduler weekly job."""
-    logger.info("Starting weekly orchestra discovery...")
+    print("Starting weekly directory discovery...")
     db = SessionLocal()
     try:
         existing_names = {o.name.lower() for o in db.query(models.Orchestra).all()}
@@ -237,9 +238,9 @@ def run_weekly_discovery():
             time.sleep(2)
 
         db.commit()
-        logger.info(f"Discovery complete: {added} new orchestras added.")
+        print(f"Directory discovery complete: {added} new orchestras added.")
     except Exception as e:
         db.rollback()
-        logger.error(f"Discovery error: {e}")
+        print(f"Directory discovery error: {e}")
     finally:
         db.close()
