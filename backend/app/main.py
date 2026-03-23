@@ -55,13 +55,12 @@ app.include_router(requests_router.router, prefix="/api/requests", tags=["reques
 # Serve uploaded PDFs
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Serve the built React frontend in production
-frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")
-print(f"[startup] frontend_dist={frontend_dist!r} exists={os.path.isdir(frontend_dist)}")
-if os.path.isdir(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
-
-
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve the built React frontend in production (must be last — mount "/" catches everything)
+frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")
+if os.path.isdir(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
