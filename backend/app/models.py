@@ -14,6 +14,7 @@ class OrchestraType(str, enum.Enum):
     regional = "regional"
     community = "community"
     youth = "youth"
+    other = "other"
 
 
 class RequestStatus(str, enum.Enum):

@@ -26,3 +26,11 @@ def trigger_discovery(x_admin_key: str = Header(...)):
     from app.crawler.discovery import run_weekly_discovery
     Thread(target=run_weekly_discovery, daemon=True).start()
     return {"status": "discovery started"}
+
+
+@router.post("/discover-claude")
+def trigger_claude_discovery(x_admin_key: str = Header(...)):
+    _require_key(x_admin_key)
+    from app.crawler.discovery import run_claude_state_discovery
+    Thread(target=run_claude_state_discovery, daemon=True).start()
+    return {"status": "claude state-by-state discovery started"}

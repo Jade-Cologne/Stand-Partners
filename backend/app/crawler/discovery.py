@@ -5,6 +5,7 @@ not yet in the database and add them for crawling.
 
 import json
 import logging
+import re
 import time
 
 import httpx
@@ -106,6 +107,105 @@ def _discover_from_source(source: dict) -> list[dict]:
     except Exception as e:
         logger.error(f"Failed to parse discovery response: {e}\nRaw: {raw[:500]}")
         return []
+
+
+US_STATES = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+    "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
+    "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+    "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
+    "New Hampshire", "New Jersey", "New Mexico", "New York",
+    "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+    "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+    "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington",
+    "West Virginia", "Wisconsin", "Wyoming",
+]
+
+CLAUDE_DISCOVERY_PROMPT = """\
+Return ONLY a valid JSON array, no other text, no markdown fences.
+List every orchestra you know of in {state}, United States.
+Include professional, regional, community, and youth orchestras.
+Each object must have exactly these fields:
+  "name": full official name,
+  "city": city name,
+  "state": two-letter state code,
+  "country": "US",
+  "website": homepage URL string or null,
+  "type": one of professional | regional | community | youth | other
+Only include orchestras you are confident exist. Do not hallucinate.
+Start your response with [ and end with ].
+"""
+
+
+def _discover_state_via_claude(state: str) -> list[dict]:
+    message = _client().messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        messages=[{
+            "role": "user",
+            "content": CLAUDE_DISCOVERY_PROMPT.format(state=state),
+        }],
+    )
+    raw = message.content[0].text.strip()
+    match = re.search(r"\[.*\]", raw, re.DOTALL)
+    if not match:
+        logger.warning(f"No JSON array in Claude response for {state}")
+        return []
+    try:
+        return json.loads(match.group())
+    except Exception as e:
+        logger.error(f"Failed to parse Claude response for {state}: {e}")
+        return []
+
+
+def _save_orchestras(orchestras: list[dict], existing_names: set, db) -> int:
+    added = 0
+    for o in orchestras:
+        name = o.get("name", "").strip()
+        if not name or name.lower() in existing_names:
+            continue
+        raw_type = o.get("type", "other")
+        try:
+            orch_type = models.OrchestraType(raw_type)
+        except ValueError:
+            orch_type = models.OrchestraType.other
+        db.add(models.Orchestra(
+            name=name,
+            type=orch_type,
+            city=o.get("city", ""),
+            state=o.get("state"),
+            country=o.get("country", "US"),
+            website=o.get("website"),
+            crawl_enabled=True,
+        ))
+        existing_names.add(name.lower())
+        added += 1
+    return added
+
+
+def run_claude_state_discovery():
+    """Query Claude for orchestras in each US state and add new ones to the DB."""
+    logger.info("Starting Claude state-by-state discovery...")
+    db = SessionLocal()
+    try:
+        existing_names = {o.name.lower() for o in db.query(models.Orchestra).all()}
+        total_added = 0
+
+        for state in US_STATES:
+            logger.info(f"Discovering orchestras in {state}...")
+            orchestras = _discover_state_via_claude(state)
+            added = _save_orchestras(orchestras, existing_names, db)
+            db.commit()
+            logger.info(f"  {state}: {len(orchestras)} found, {added} new")
+            time.sleep(1)
+
+        logger.info(f"Claude discovery complete: {total_added} new orchestras added.")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Claude discovery error: {e}")
+    finally:
+        db.close()
 
 
 def run_weekly_discovery():
