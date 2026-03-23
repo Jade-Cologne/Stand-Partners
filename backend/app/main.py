@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import engine
 from app import models
-from app.routers import orchestras, auditions, excerpts, requests as requests_router
+from app.routers import orchestras, auditions, excerpts, requests as requests_router, admin
 from app.crawler.scheduler import start_scheduler, stop_scheduler
 
 
@@ -51,6 +51,7 @@ app.include_router(orchestras.router, prefix="/api/orchestras", tags=["orchestra
 app.include_router(auditions.router, prefix="/api/auditions", tags=["auditions"])
 app.include_router(excerpts.router, prefix="/api/excerpts", tags=["excerpts"])
 app.include_router(requests_router.router, prefix="/api/requests", tags=["requests"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 # Serve uploaded PDFs
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
