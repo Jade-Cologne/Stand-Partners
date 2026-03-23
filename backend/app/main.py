@@ -56,7 +56,7 @@ app.include_router(requests_router.router, prefix="/api/requests", tags=["reques
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Serve the built React frontend in production
-frontend_dist = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
+frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")
 if os.path.isdir(frontend_dist):
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 

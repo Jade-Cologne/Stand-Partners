@@ -15,7 +15,7 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 RUN mkdir -p uploads/excerpts
-# Copy frontend build to where main.py expects it
-COPY --from=frontend-build /frontend/dist /frontend/dist
+# Copy frontend build into the workdir so the path is predictable
+COPY --from=frontend-build /frontend/dist /app/frontend/dist
 EXPOSE 8000
 CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
