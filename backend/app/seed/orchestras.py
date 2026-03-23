@@ -209,6 +209,27 @@ SEED_ORCHESTRAS = [
         "website": "https://bsomusic.org",
         "audition_page": "https://bsomusic.org/about/employment",
     },
+    # ── From Claude discovery test ──────────────────────────────────────────────
+    {"name": "Bozeman Symphony Orchestra", "type": OrchestraType.regional, "city": "Bozeman", "state": "MT", "country": "US", "lat": 45.6770, "lng": -111.0429, "website": "https://www.bozemansymphony.org"},
+    {"name": "Duluth Superior Symphony Orchestra", "type": OrchestraType.regional, "city": "Duluth", "state": "MN", "country": "US", "lat": 46.7867, "lng": -92.1005, "website": None},
+    {"name": "Traverse Symphony Orchestra", "type": OrchestraType.regional, "city": "Traverse City", "state": "MI", "country": "US", "lat": 44.7631, "lng": -85.6206, "website": None},
+    {"name": "Flagstaff Symphony Orchestra", "type": OrchestraType.regional, "city": "Flagstaff", "state": "AZ", "country": "US", "lat": 35.1983, "lng": -111.6513, "website": "https://www.flagstaffsymphony.org"},
+    {"name": "Shreveport Symphony Orchestra", "type": OrchestraType.regional, "city": "Shreveport", "state": "LA", "country": "US", "lat": 32.5252, "lng": -93.7502, "website": None},
+    {"name": "Lima Symphony Orchestra", "type": OrchestraType.regional, "city": "Lima", "state": "OH", "country": "US", "lat": 40.7420, "lng": -84.1052, "website": None},
+    {"name": "Billings Symphony Orchestra", "type": OrchestraType.regional, "city": "Billings", "state": "MT", "country": "US", "lat": 45.7833, "lng": -108.5007, "website": None},
+    {"name": "Santa Cruz Symphony", "type": OrchestraType.regional, "city": "Santa Cruz", "state": "CA", "country": "US", "lat": 36.9741, "lng": -122.0308, "website": None},
+    {"name": "Champaign-Urbana Symphony Orchestra", "type": OrchestraType.regional, "city": "Champaign", "state": "IL", "country": "US", "lat": 40.1164, "lng": -88.2434, "website": None},
+    {"name": "Youngstown Symphony Orchestra", "type": OrchestraType.regional, "city": "Youngstown", "state": "OH", "country": "US", "lat": 41.0998, "lng": -80.6495, "website": None},
+    {"name": "Midland Symphony Orchestra", "type": OrchestraType.regional, "city": "Midland", "state": "MI", "country": "US", "lat": 43.6156, "lng": -84.2472, "website": None},
+    {"name": "Cape Cod Symphony Orchestra", "type": OrchestraType.regional, "city": "Yarmouth Port", "state": "MA", "country": "US", "lat": 41.7073, "lng": -70.2273, "website": None},
+    {"name": "Amarillo Symphony", "type": OrchestraType.regional, "city": "Amarillo", "state": "TX", "country": "US", "lat": 35.2220, "lng": -101.8313, "website": None},
+    {"name": "Anchorage Symphony Orchestra", "type": OrchestraType.regional, "city": "Anchorage", "state": "AK", "country": "US", "lat": 61.2181, "lng": -149.9003, "website": None},
+    {"name": "Quad City Symphony Orchestra", "type": OrchestraType.regional, "city": "Davenport", "state": "IA", "country": "US", "lat": 41.5236, "lng": -90.5776, "website": None},
+    {"name": "Vermont Symphony Orchestra", "type": OrchestraType.regional, "city": "Burlington", "state": "VT", "country": "US", "lat": 44.4759, "lng": -73.2121, "website": None},
+    {"name": "Wichita Falls Symphony Orchestra", "type": OrchestraType.regional, "city": "Wichita Falls", "state": "TX", "country": "US", "lat": 33.9137, "lng": -98.4934, "website": None},
+    {"name": "New Hampshire Philharmonic Orchestra", "type": OrchestraType.community, "city": "Salem", "state": "NH", "country": "US", "lat": 42.7898, "lng": -71.2011, "website": None},
+    {"name": "Roanoke Symphony Orchestra", "type": OrchestraType.regional, "city": "Roanoke", "state": "VA", "country": "US", "lat": 37.2710, "lng": -79.9414, "website": None},
+    {"name": "Great Falls Symphony", "type": OrchestraType.regional, "city": "Great Falls", "state": "MT", "country": "US", "lat": 47.5002, "lng": -111.3008, "website": None},
 ]
 
 
