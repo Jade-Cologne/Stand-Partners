@@ -3,8 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import { api } from "../api";
 
 const TYPE_CHIP_COLORS = {
-  professional: "bg-indigo-900/60 text-indigo-300",
-  regional:     "bg-cyan-900/60 text-cyan-300",
+  major:        "bg-indigo-900/60 text-indigo-300",
+  professional: "bg-cyan-900/60 text-cyan-300",
   community:    "bg-amber-900/60 text-amber-300",
   youth:        "bg-green-900/60 text-green-300",
 };

@@ -45,6 +45,11 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import text
     with engine.connect() as conn:
         conn.execute(text("ALTER TYPE orchestratype ADD VALUE IF NOT EXISTS 'other'"))
+        conn.execute(text("ALTER TYPE orchestratype ADD VALUE IF NOT EXISTS 'major'"))
+        conn.commit()
+        # Rename orchestra types: old 'professional' → 'major', old 'regional' → 'professional'
+        conn.execute(text("UPDATE orchestras SET type = 'major' WHERE type = 'professional'"))
+        conn.execute(text("UPDATE orchestras SET type = 'professional' WHERE type = 'regional'"))
         conn.execute(text("ALTER TABLE orchestras ADD COLUMN IF NOT EXISTS crawl_error TEXT"))
         conn.execute(text("ALTER TABLE orchestras ADD COLUMN IF NOT EXISTS source VARCHAR"))
         conn.execute(text("ALTER TABLE orchestras ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE"))

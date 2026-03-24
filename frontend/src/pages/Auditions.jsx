@@ -13,8 +13,8 @@ const INSTRUMENT_FAMILIES = [
 
 const ORCHESTRA_TYPES = [
   { label: "All types", value: "" },
+  { label: "Major", value: "major" },
   { label: "Professional", value: "professional" },
-  { label: "Regional", value: "regional" },
   { label: "Community", value: "community" },
   { label: "Youth", value: "youth" },
 ];

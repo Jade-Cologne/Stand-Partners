@@ -6,22 +6,23 @@ import L from "leaflet";
 import { api } from "../api";
 
 const TYPE_COLORS = {
-  professional: "#4f46e5",
-  regional:     "#0891b2",
+  major:        "#4f46e5",
+  professional: "#0891b2",
   community:    "#d97706",
   youth:        "#16a34a",
   other:        "#9333ea",
 };
 
 const TYPE_LABELS = {
+  major:        "Major",
   professional: "Professional",
-  regional:     "Regional",
   community:    "Community",
   youth:        "Youth",
   other:        "Other",
 };
 
 function normalizeType(type) {
+  if (type === "regional") return "professional"; // DB migration alias
   return type in TYPE_COLORS ? type : "other";
 }
 
@@ -128,42 +129,13 @@ function ClusterList({ pins, onSelect, onClose }) {
   );
 }
 
-function Legend() {
+function MapControls({ filters, setFilters, totalPins }) {
   return (
-    <div className="absolute bottom-8 left-4 z-[1000] bg-gray-900/90 rounded-lg shadow-lg p-3 text-sm border border-gray-700">
-      <p className="font-semibold text-gray-200 mb-2">Orchestra type</p>
-      {Object.entries(TYPE_LABELS).map(([type, label]) => (
-        <div key={type} className="flex items-center gap-2 mb-1">
-          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: TYPE_COLORS[type] }} />
-          <span className="text-gray-400">{label}</span>
-        </div>
-      ))}
-      <div className="border-t border-gray-700 mt-2 pt-2 space-y-1">
-        <div className="flex items-center gap-2">
-          <svg width="13" height="13" viewBox="0 0 13 13">
-            <circle cx="6.5" cy="6.5" r="5" fill="#6b7280" fillOpacity="0.65" stroke="white" strokeWidth="1"/>
-          </svg>
-          <span className="text-xs text-gray-500">No openings</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <svg width="13" height="13" viewBox="0 0 13 13">
-            <polygon points="6.5,0.5 12.5,6.5 6.5,12.5 0.5,6.5" fill="#6b7280" stroke="white" strokeWidth="1"/>
-          </svg>
-          <span className="text-xs text-gray-500">Open auditions</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FilterPanel({ filters, setFilters, totalPins }) {
-  return (
-    <div className="absolute top-4 right-4 z-[1000] bg-gray-900/90 rounded-lg shadow-lg p-4 w-56 border border-gray-700">
-      <p className="font-semibold text-gray-200 mb-3">Filter map</p>
+    <div className="absolute top-4 right-4 z-[1000] bg-slate-900/92 backdrop-blur-sm rounded-xl shadow-xl p-4 w-56 border border-slate-700/60">
+      <p className="font-semibold text-slate-200 mb-3 text-sm">Filter map</p>
       <div className="mb-3">
-        <label className="text-xs text-gray-500 mb-1 block">Orchestra type</label>
         {Object.entries(TYPE_LABELS).map(([type, label]) => (
-          <label key={type} className="flex items-center gap-2 text-sm text-gray-300 mb-1 cursor-pointer">
+          <label key={type} className="flex items-center gap-2 text-sm text-slate-300 mb-1.5 cursor-pointer">
             <input
               type="checkbox"
               checked={filters.types.includes(type)}
@@ -176,22 +148,36 @@ function FilterPanel({ filters, setFilters, totalPins }) {
                 }));
               }}
             />
+            <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: TYPE_COLORS[type] }} />
             {label}
           </label>
         ))}
       </div>
       <div className="mb-3">
-        <label className="text-xs text-gray-500 mb-1 block">Openings only</label>
-        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
           <input
             type="checkbox"
             checked={filters.openingsOnly}
             onChange={(e) => setFilters((f) => ({ ...f, openingsOnly: e.target.checked }))}
           />
-          Show orchestras with open auditions
+          Open auditions only
         </label>
       </div>
-      <p className="text-xs text-gray-500">{totalPins} orchestras shown</p>
+      <div className="border-t border-slate-700/60 pt-2.5 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 13 13">
+            <circle cx="6.5" cy="6.5" r="5" fill="#94a3b8" fillOpacity="0.65" stroke="white" strokeWidth="1"/>
+          </svg>
+          <span className="text-xs text-slate-500">No openings</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 13 13">
+            <polygon points="6.5,0.5 12.5,6.5 6.5,12.5 0.5,6.5" fill="#94a3b8" stroke="white" strokeWidth="1"/>
+          </svg>
+          <span className="text-xs text-slate-500">Open auditions</span>
+        </div>
+      </div>
+      <p className="text-xs text-slate-600 mt-2.5">{totalPins} orchestras shown</p>
     </div>
   );
 }
@@ -250,10 +236,13 @@ export default function Home() {
         zoom={4}
         style={{ height: "100%", width: "100%" }}
         scrollWheelZoom={true}
+        wheelPxPerZoomLevel={120}
+        zoomSnap={0.5}
+        zoomDelta={0.5}
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         <MarkerClusterGroup
           chunkedLoading
@@ -278,16 +267,17 @@ export default function Home() {
                 position={[pin.lat, pin.lng]}
                 icon={createIcon(color, hasAuditions)}
                 eventHandlers={{
-                  mouseover: () => {
+                  mouseover: (e) => {
+                    const { x, y } = e.containerPoint;
                     hoverTimer.current = setTimeout(() => {
-                      setDetailPin(pin);
+                      setDetailPin({ pin, x, y });
                       setClusterPins(null);
                     }, 700);
                   },
                   mouseout: () => clearTimeout(hoverTimer.current),
-                  click: () => {
+                  click: (e) => {
                     clearTimeout(hoverTimer.current);
-                    setDetailPin(pin);
+                    setDetailPin({ pin, x: e.containerPoint.x, y: e.containerPoint.y });
                     setClusterPins(null);
                   },
                 }}
@@ -296,17 +286,23 @@ export default function Home() {
           })}
         </MarkerClusterGroup>
       </MapContainer>
-      <Legend />
-      <FilterPanel filters={filters} setFilters={setFilters} totalPins={visible.length} />
+      <MapControls filters={filters} setFilters={setFilters} totalPins={visible.length} />
       {clusterPins && !detailPin && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]">
-          <ClusterList pins={clusterPins} onSelect={(pin) => setDetailPin(pin)} onClose={closeAll} />
+          <ClusterList pins={clusterPins} onSelect={(p) => setDetailPin({ pin: p, x: null, y: null })} onClose={closeAll} />
         </div>
       )}
       {detailPin && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]">
+        <div
+          className="absolute z-[1000] pointer-events-auto"
+          style={
+            detailPin.x !== null
+              ? { left: detailPin.x, top: detailPin.y, transform: "translate(-50%, calc(-100% - 14px))" }
+              : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
+          }
+        >
           <PinCard
-            pin={detailPin}
+            pin={detailPin.pin}
             onClose={closeAll}
             onBack={clusterPins ? () => setDetailPin(null) : null}
             navigate={navigate}

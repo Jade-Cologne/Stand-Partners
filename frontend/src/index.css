@@ -17,3 +17,8 @@ body {
 .leaflet-popup-content-wrapper {
   border-radius: 8px;
 }
+
+/* Tone down the Voyager tiles slightly to blend with the dark UI */
+.leaflet-tile-pane {
+  filter: brightness(0.82) saturate(0.85);
+}

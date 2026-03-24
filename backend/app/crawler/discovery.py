@@ -29,12 +29,12 @@ def _client():
 DIRECTORY_SOURCES = [
     {
         "url": "https://www.icsom.org/orchestras/",
-        "type": models.OrchestraType.professional,
+        "type": models.OrchestraType.major,
         "description": "ICSOM (International Conference of Symphony and Opera Musicians) member orchestras",
     },
     {
         "url": "https://www.ropa.org/orchestras/",
-        "type": models.OrchestraType.regional,
+        "type": models.OrchestraType.professional,
         "description": "ROPA (Regional Orchestra Players' Association) member orchestras",
     },
     {
@@ -125,14 +125,18 @@ US_STATES = [
 CLAUDE_DISCOVERY_PROMPT = """\
 Return ONLY a valid JSON array, no other text, no markdown fences.
 List every orchestra and symphony you know of in {state}, United States.
-Include professional, regional, community, and youth orchestras.
+Include major, professional, community, and youth orchestras.
 Each object must have exactly these fields:
   "name": full official name,
   "city": city name,
   "state": two-letter state code,
   "country": "US",
   "website": your best guess at the homepage URL based on the orchestra name and city (e.g. www.citysymphony.org) — only use null if you truly have no basis for a guess,
-  "type": one of professional | regional | community | youth
+  "type": one of major | professional | community | youth
+    major = top-tier fully professional orchestras (e.g. symphony orchestras with full-time salaried musicians)
+    professional = professional but smaller/regional orchestras with paid per-service musicians
+    community = volunteer or semi-professional community orchestras
+    youth = youth orchestras
 Exclude university, college, conservatory, and student orchestras entirely.
 Only include orchestras open to the general public (professional auditions,
 community participation, or youth programs not tied to a school).

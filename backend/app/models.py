@@ -10,8 +10,9 @@ from app.database import Base
 
 
 class OrchestraType(str, enum.Enum):
+    major = "major"
     professional = "professional"
-    regional = "regional"
+    regional = "regional"      # legacy — migrated to professional; kept for DB compat
     community = "community"
     youth = "youth"
     other = "other"
