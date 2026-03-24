@@ -375,22 +375,32 @@ def _upsert_sub_list(db, orchestra: models.Orchestra, sub_data: dict):
         db.add(models.SubListInfo(orchestra_id=orchestra.id, **kwargs))
 
 
+def _norm_url(u: Optional[str]) -> Optional[str]:
+    if u and not u.startswith(("http://", "https://")):
+        return "https://" + u
+    return u
+
+
 def crawl_orchestra(orchestra: models.Orchestra):
     """Crawl a single orchestra and persist results."""
     db = SessionLocal()
     try:
+        # Normalize stored URLs before use
+        audition_page = _norm_url(orchestra.audition_page)
+        website = _norm_url(orchestra.website)
+
         # Determine URL to fetch
-        url = orchestra.audition_page or orchestra.website
+        url = audition_page or website
         if not url:
             return
 
         text = _fetch_page(url)
 
         # If the audition page 404'd or returned nothing, fall back to discovery
-        if not text and orchestra.audition_page:
+        if not text and audition_page:
             print(f"[crawl] Audition page failed for {orchestra.name}, searching homepage...")
             orchestra.audition_page = None
-            url = orchestra.website
+            url = website
             if url:
                 found = _find_audition_page(url)
                 if found:
@@ -399,7 +409,7 @@ def crawl_orchestra(orchestra: models.Orchestra):
                 text = _fetch_page(url) if url else None
 
         # If we only have the homepage, try to find the auditions page
-        if text is None and url == orchestra.website:
+        if text is None and url == website:
             found = _find_audition_page(url)
             if found:
                 url = found

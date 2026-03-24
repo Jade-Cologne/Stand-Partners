@@ -162,6 +162,15 @@ def _discover_state_via_claude(state: str) -> list[dict]:
         return []
 
 
+def _normalize_url(url: str | None) -> str | None:
+    if not url:
+        return url
+    url = url.strip()
+    if url and not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
+
+
 def _verify_url_matches(url: str, name: str, city: str) -> tuple[bool, str]:
     """Fetch a URL and check it plausibly belongs to this orchestra. Returns (ok, reason)."""
     try:
@@ -207,7 +216,7 @@ def _save_orchestras(orchestras: list[dict], existing_names: set, db, source: st
             _archive_discovery(db, o, source, f"duplicate of existing: {name}")
             continue
         # Verify provided URL actually matches this orchestra
-        website = o.get("website")
+        website = _normalize_url(o.get("website"))
         if website:
             ok, reason = _verify_url_matches(website, name, o.get("city", ""))
             if not ok:
@@ -356,7 +365,7 @@ def run_url_enrichment():
                 print(f"[enrich] Parse error for batch {i//batch_size + 1}: {e}")
                 continue
 
-            id_to_url = {r["id"]: r.get("website") for r in results if r.get("website")}
+            id_to_url = {r["id"]: _normalize_url(r.get("website")) for r in results if r.get("website")}
             for o in batch:
                 if o.id not in id_to_url:
                     continue
