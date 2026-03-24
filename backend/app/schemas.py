@@ -40,7 +40,7 @@ class SubListInfoOut(BaseModel):
     contact_name: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
-    has_formal_submission: bool = False
+    has_formal_submission: Optional[bool] = False
     submission_url: Optional[str] = None
     submission_details: Optional[str] = None
     notes: Optional[str] = None

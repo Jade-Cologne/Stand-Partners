@@ -38,6 +38,7 @@ discover-states:
 define LIST_NO_URL_PY
 import json, sys
 data = json.load(sys.stdin)
+if not isinstance(data, list): print(f'Unexpected API response: {data}'); sys.exit(1)
 missing = [o for o in data if not o.get('website')]
 missing.sort(key=lambda o: (o.get('state') or '', o.get('name') or ''))
 print(f'Orchestras without a website URL: {len(missing)}\n')
@@ -49,11 +50,12 @@ endef
 export LIST_NO_URL_PY
 
 list-no-url:
-	@curl -ks "$(BASE_URL)/api/orchestras" | python3 -c "$$LIST_NO_URL_PY"
+	@curl -ksL "$(BASE_URL)/api/orchestras/" | python3 -c "$$LIST_NO_URL_PY"
 
 define LIST_CRAWL_ERRORS_PY
 import json, sys
 data = json.load(sys.stdin)
+if not isinstance(data, list): print(f'Unexpected API response: {data}'); sys.exit(1)
 errors = [o for o in data if o.get('crawl_error')]
 errors.sort(key=lambda o: (o.get('state') or '', o.get('name') or ''))
 print(f'Orchestras with crawl errors: {len(errors)}\n')
@@ -65,11 +67,12 @@ endef
 export LIST_CRAWL_ERRORS_PY
 
 list-crawl-errors:
-	@curl -ks "$(BASE_URL)/api/orchestras" | python3 -c "$$LIST_CRAWL_ERRORS_PY"
+	@curl -ksL "$(BASE_URL)/api/orchestras/" | python3 -c "$$LIST_CRAWL_ERRORS_PY"
 
 define LIST_NO_AUDITION_PAGE_PY
 import json, sys
 data = json.load(sys.stdin)
+if not isinstance(data, list): print(f'Unexpected API response: {data}'); sys.exit(1)
 missing = [o for o in data if o.get('website') and not o.get('audition_page')]
 missing.sort(key=lambda o: (o.get('state') or '', o.get('name') or ''))
 print(f'Orchestras with website but no audition page found: {len(missing)}\n')
@@ -81,11 +84,19 @@ endef
 export LIST_NO_AUDITION_PAGE_PY
 
 list-no-audition-page:
-	@curl -ks "$(BASE_URL)/api/orchestras" | python3 -c "$$LIST_NO_AUDITION_PAGE_PY"
+	@curl -ksL "$(BASE_URL)/api/orchestras/" | python3 -c "$$LIST_NO_AUDITION_PAGE_PY"
 
 define STATUS_PY
 import json, sys
-data = json.load(sys.stdin)
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception as e:
+    print(f'Bad response ({e}): {raw[:300]!r}')
+    sys.exit(1)
+if not isinstance(data, list):
+    print(f'Unexpected API response: {data}')
+    sys.exit(1)
 total = len(data)
 with_website = sum(1 for o in data if o.get('website'))
 with_audition_page = sum(1 for o in data if o.get('audition_page'))
@@ -103,7 +114,7 @@ endef
 export STATUS_PY
 
 status:
-	@curl -ks "$(BASE_URL)/api/orchestras" | python3 -c "$$STATUS_PY"
+	@curl -ksL "$(BASE_URL)/api/orchestras/" | python3 -c "$$STATUS_PY"
 
 stop-crawl:
 	$(STOP) -d '{"job":"crawl"}'
