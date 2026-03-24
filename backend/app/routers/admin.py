@@ -73,6 +73,13 @@ def trigger_url_enrichment(x_admin_key: str = Header(...), sync: bool = False):
     return {"status": "url enrichment started"}
 
 
+@router.post("/clean")
+def trigger_clean(x_admin_key: str = Header(...), dry_run: bool = True):
+    _require_key(x_admin_key)
+    from app.crawler.cleaner import run_data_clean
+    return run_data_clean(dry_run=dry_run)
+
+
 @router.post("/discover-claude-state")
 def trigger_claude_state(payload: StateRequest, x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
