@@ -1,5 +1,6 @@
 import os
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 from threading import Thread
 
 router = APIRouter()
@@ -43,3 +44,18 @@ def trigger_claude_discovery(x_admin_key: str = Header(...), sync: bool = False)
         return {"status": "claude discovery complete"}
     Thread(target=run_claude_state_discovery, daemon=True).start()
     return {"status": "claude state-by-state discovery started"}
+
+
+class StateRequest(BaseModel):
+    state: str
+
+
+@router.post("/discover-claude-state")
+def trigger_claude_state(payload: StateRequest, x_admin_key: str = Header(...), sync: bool = False):
+    _require_key(x_admin_key)
+    from app.crawler.discovery import run_claude_state_discovery_for
+    if sync:
+        run_claude_state_discovery_for(payload.state)
+        return {"status": f"discovery complete for {payload.state}"}
+    Thread(target=run_claude_state_discovery_for, args=(payload.state,), daemon=True).start()
+    return {"status": f"discovery started for {payload.state}"}
