@@ -67,6 +67,8 @@ class AuditionOut(AuditionBase):
     id: int
     orchestra_id: int
     scraped_at: datetime
+    first_seen: Optional[datetime] = None
+    last_seen: Optional[datetime] = None
     active: bool
     excerpts: List[ExcerptSummary] = []
 
@@ -104,10 +106,18 @@ class OrchestraOut(OrchestraBase):
     last_crawled_at: Optional[datetime] = None
     crawl_error: Optional[str] = None
     source: Optional[str] = None
+    verified: bool = False
     active_audition_count: int = 0
     sub_list_info: Optional[SubListInfoOut] = None
 
     model_config = {"from_attributes": True}
+
+
+class PaginatedOrchestras(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: List[OrchestraOut]
 
 class OrchestraMapPin(BaseModel):
     id: int

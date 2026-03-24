@@ -1,14 +1,39 @@
 import os
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import engine
 from app import models
 from app.routers import orchestras, auditions, excerpts, requests as requests_router, admin
 from app.crawler.scheduler import start_scheduler, stop_scheduler
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Simple in-memory rate limiter: 120 req/min per IP on public API endpoints."""
+    def __init__(self, app, calls: int = 120, period: int = 60):
+        super().__init__(app)
+        self.calls = calls
+        self.period = period
+        self._counts: dict = defaultdict(list)
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if not path.startswith("/api/") or path.startswith("/api/admin"):
+            return await call_next(request)
+        ip = (request.client.host if request.client else "unknown")
+        now = time.time()
+        self._counts[ip] = [t for t in self._counts[ip] if now - t < self.period]
+        if len(self._counts[ip]) >= self.calls:
+            return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
+        self._counts[ip].append(now)
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -22,6 +47,14 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TYPE orchestratype ADD VALUE IF NOT EXISTS 'other'"))
         conn.execute(text("ALTER TABLE orchestras ADD COLUMN IF NOT EXISTS crawl_error TEXT"))
         conn.execute(text("ALTER TABLE orchestras ADD COLUMN IF NOT EXISTS source VARCHAR"))
+        conn.execute(text("ALTER TABLE orchestras ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE"))
+        conn.execute(text("ALTER TABLE auditions ADD COLUMN IF NOT EXISTS first_seen TIMESTAMP"))
+        conn.execute(text("ALTER TABLE auditions ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP"))
+        conn.execute(text("ALTER TABLE auditions ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_orchestras_state ON orchestras(state)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_orchestras_type ON orchestras(type)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_auditions_orchestra_active ON auditions(orchestra_id, active)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_auditions_archived ON auditions(archived_at)"))
         conn.commit()
 
     # Ensure upload directory exists
@@ -47,9 +80,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://stand.partners"],
+    allow_origins=["http://localhost:5173", "https://stand.partners", "https://www.stand.partners"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

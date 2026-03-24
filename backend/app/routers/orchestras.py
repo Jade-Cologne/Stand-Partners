@@ -1,5 +1,6 @@
+from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -12,27 +13,43 @@ def _active_audition_count(orchestra: models.Orchestra) -> int:
     return sum(1 for a in orchestra.auditions if a.active)
 
 
-@router.get("/", response_model=List[schemas.OrchestraOut])
+@router.get("/", response_model=schemas.PaginatedOrchestras)
 def list_orchestras(
+    response: Response,
     type: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="Search by name"),
+    verified: Optional[bool] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    q = db.query(models.Orchestra)
+    query = db.query(models.Orchestra)
     if type:
-        q = q.filter(models.Orchestra.type == type)
+        query = query.filter(models.Orchestra.type == type)
     if state:
-        q = q.filter(models.Orchestra.state == state)
+        query = query.filter(models.Orchestra.state == state)
     if country:
-        q = q.filter(models.Orchestra.country == country)
-    orchestras = q.order_by(models.Orchestra.name).all()
-    result = []
+        query = query.filter(models.Orchestra.country == country)
+    if verified is not None:
+        query = query.filter(models.Orchestra.verified == verified)
+    if q:
+        query = query.filter(models.Orchestra.name.ilike(f"%{q}%"))
+    total = query.count()
+    orchestras = query.order_by(models.Orchestra.name).offset(offset).limit(limit).all()
+    items = []
+    latest = None
     for o in orchestras:
         out = schemas.OrchestraOut.model_validate(o)
         out.active_audition_count = _active_audition_count(o)
-        result.append(out)
-    return result
+        items.append(out)
+        ts = o.last_crawled_at or o.added_at
+        if latest is None or ts > latest:
+            latest = ts
+    if latest:
+        response.headers["Last-Modified"] = latest.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    return schemas.PaginatedOrchestras(total=total, limit=limit, offset=offset, items=items)
 
 
 @router.get("/map", response_model=List[schemas.OrchestraMapPin])

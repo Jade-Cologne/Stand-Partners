@@ -22,7 +22,7 @@ async function post(path, body) {
 
 export const api = {
   orchestras: {
-    list: (params) => get("/orchestras", params),
+    list: (params) => get("/orchestras", params).then(r => r.items ?? r),
     mapPins: () => get("/orchestras/map"),
     get: (id) => get(`/orchestras/${id}`),
     auditions: (id, params) => get(`/orchestras/${id}/auditions`, params),

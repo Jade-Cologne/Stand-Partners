@@ -240,10 +240,14 @@ def seed():
         added = 0
         for data in SEED_ORCHESTRAS:
             if data["name"] not in existing:
-                db.add(Orchestra(**data, source="seed"))
+                db.add(Orchestra(**data, source="seed", verified=True))
                 added += 1
-            elif existing[data["name"]].source != "seed":
-                existing[data["name"]].source = "seed"
+            else:
+                o = existing[data["name"]]
+                if o.source != "seed":
+                    o.source = "seed"
+                if not o.verified:
+                    o.verified = True
         db.commit()
         print(f"Seeded {added} orchestras ({len(existing)} already existed).")
     finally:

@@ -61,6 +61,8 @@ class OrchestraUpdate(BaseModel):
     website: str | None = None
     audition_page: str | None = None
     crawl_enabled: bool | None = None
+    verified: bool | None = None
+    source: str | None = None
 
 
 @router.post("/stop")

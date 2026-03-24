@@ -13,3 +13,4 @@ anthropic==0.34.2
 apscheduler==3.10.4
 python-multipart==0.0.9
 aiofiles==24.1.0
+playwright

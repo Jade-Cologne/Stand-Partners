@@ -6,7 +6,7 @@ structured audition/sub-list data, persist to the database.
 import json
 import logging
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 import httpx
@@ -36,6 +36,8 @@ Return a JSON object with this exact structure:
 {{
   "venue_name": "name of the concert hall or venue, or null if not found",
   "venue_address": "full street address of the orchestra's primary venue, or null if not found",
+  "personnel_manager_name": "name of the personnel manager or HR/audition contact if listed, or null",
+  "personnel_manager_email": "email address of the personnel manager or audition contact if listed, or null",
   "auditions": [
     {{
       "position": "string, e.g. 'Principal Oboe' or 'Section Violin'",
@@ -114,18 +116,50 @@ def _geocode(query: str) -> Optional[tuple[float, float]]:
 
 
 def _fetch_page(url: str) -> Optional[str]:
-    """Fetch a URL and return visible text content."""
+    """Fetch a URL and return visible text content. Retries twice on failure,
+    then falls back to Playwright for JS-rendered pages."""
+    headers = {"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"}
+    for attempt in range(3):
+        try:
+            resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "lxml")
+            for tag in soup(["script", "style", "nav", "footer", "header"]):
+                tag.decompose()
+            text = soup.get_text(separator="\n", strip=True)[:12000]
+            # If we got very little text, the page is probably JS-rendered — try Playwright
+            if len(text) < 200:
+                pw_text = _fetch_page_playwright(url)
+                if pw_text:
+                    return pw_text
+            return text
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                print(f"[crawl] Failed to fetch {url} after 3 attempts: {e}")
+                return _fetch_page_playwright(url)
+    return None
+
+
+def _fetch_page_playwright(url: str) -> Optional[str]:
+    """Playwright fallback for JS-rendered pages. No-ops gracefully if not installed."""
     try:
-        headers = {"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"}
-        resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "lxml")
-        # Remove nav, footer, scripts, styles
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, wait_until="networkidle", timeout=20000)
+            content = page.content()
+            browser.close()
+        soup = BeautifulSoup(content, "lxml")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
-        return soup.get_text(separator="\n", strip=True)[:12000]  # cap at ~12k chars
+        return soup.get_text(separator="\n", strip=True)[:12000]
+    except ImportError:
+        return None
     except Exception as e:
-        print(f"[crawl] Failed to fetch {url}: {e}")
+        print(f"[crawl] Playwright fallback failed for {url}: {e}")
         return None
 
 
@@ -265,13 +299,17 @@ def _upsert_audition(db, orchestra: models.Orchestra, audition_data: dict, sourc
         except Exception:
             return None
 
+    now = datetime.utcnow()
+    new_excerpt_text = audition_data.get("raw_excerpt_text")
+
     if existing:
         existing.deadline = parse_date(audition_data.get("deadline"))
         existing.audition_date = parse_date(audition_data.get("audition_date"))
         existing.audition_location = audition_data.get("audition_location")
-        existing.raw_excerpt_text = audition_data.get("raw_excerpt_text")
+        existing.raw_excerpt_text = new_excerpt_text
         existing.source_url = source_url
-        existing.scraped_at = datetime.utcnow()
+        existing.scraped_at = now
+        existing.last_seen = now
         audition = existing
     else:
         audition = models.Audition(
@@ -284,16 +322,21 @@ def _upsert_audition(db, orchestra: models.Orchestra, audition_data: dict, sourc
             deadline=parse_date(audition_data.get("deadline")),
             audition_date=parse_date(audition_data.get("audition_date")),
             audition_location=audition_data.get("audition_location"),
-            raw_excerpt_text=audition_data.get("raw_excerpt_text"),
+            raw_excerpt_text=new_excerpt_text,
             source_url=source_url,
             active=True,
+            first_seen=now,
+            last_seen=now,
         )
         db.add(audition)
         db.flush()
 
-    # Link excerpts
-    raw_excerpt_text = audition_data.get("raw_excerpt_text")
-    if raw_excerpt_text:
+    # Only re-normalize excerpts if the raw text actually changed
+    excerpt_text_changed = new_excerpt_text and new_excerpt_text != (
+        existing.raw_excerpt_text if existing else None
+    )
+    raw_excerpt_text = new_excerpt_text
+    if raw_excerpt_text and (not existing or excerpt_text_changed):
         instrument = audition_data.get("instrument", "").lower()
         excerpts = _normalize_excerpts(raw_excerpt_text)
         for exc_data in excerpts:
@@ -391,6 +434,21 @@ def crawl_orchestra(orchestra: models.Orchestra):
         if data.get("sub_list"):
             _upsert_sub_list(db, orchestra, data["sub_list"])
 
+        # Update personnel manager info if found
+        if data.get("personnel_manager_name"):
+            orchestra.personnel_manager_name = data["personnel_manager_name"]
+        if data.get("personnel_manager_email"):
+            orchestra.personnel_manager_email = data["personnel_manager_email"]
+
+        # Archive auditions that have been inactive for 90+ days
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        db.query(models.Audition).filter(
+            models.Audition.orchestra_id == orchestra.id,
+            models.Audition.active == False,
+            models.Audition.archived_at.is_(None),
+            models.Audition.last_seen < cutoff,
+        ).update({"archived_at": datetime.utcnow()})
+
         orchestra.last_crawled_at = datetime.utcnow()
         orchestra.crawl_error = None
         db.commit()
@@ -421,10 +479,13 @@ def run_daily_crawl():
     finally:
         db.close()
 
+    skip_cutoff = datetime.utcnow() - timedelta(days=12)
     for orchestra in orchestras:
         if is_cancelled("crawl"):
             print("Daily crawl cancelled.")
             return
+        if orchestra.last_crawled_at and orchestra.last_crawled_at > skip_cutoff:
+            continue
         crawl_orchestra(orchestra)
         time.sleep(1)  # be polite — 1 req/sec
 

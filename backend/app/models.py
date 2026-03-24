@@ -41,8 +41,9 @@ class Orchestra(Base):
     added_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_crawled_at = Column(DateTime, nullable=True)
     crawl_enabled = Column(Boolean, default=True, nullable=False)
-    crawl_error = Column(Text, nullable=True)  # last error message if crawl failed
-    source = Column(String, nullable=True)  # seed | directory | claude | manual
+    crawl_error = Column(Text, nullable=True)
+    source = Column(String, nullable=True)       # seed | directory | claude | manual
+    verified = Column(Boolean, default=False, nullable=False)
     notes = Column(Text, nullable=True)
 
     auditions = relationship("Audition", back_populates="orchestra", cascade="all, delete-orphan")
@@ -65,7 +66,10 @@ class Audition(Base):
     raw_excerpt_text = Column(Text, nullable=True)  # verbatim from the website
     source_url = Column(String, nullable=True)
     scraped_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    first_seen = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_seen = Column(DateTime, nullable=True)
     active = Column(Boolean, default=True, nullable=False)
+    archived_at = Column(DateTime, nullable=True)
 
     orchestra = relationship("Orchestra", back_populates="auditions")
     excerpt_links = relationship("AuditionExcerpt", back_populates="audition", cascade="all, delete-orphan")
@@ -115,6 +119,22 @@ class AuditionExcerpt(Base):
 
     audition = relationship("Audition", back_populates="excerpt_links")
     excerpt = relationship("Excerpt", back_populates="audition_links")
+
+
+class DiscoveryArchive(Base):
+    """Orchestras that were discovered but failed verification or were duplicates."""
+    __tablename__ = "discovery_archive"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    type = Column(String, nullable=True)
+    discovered_source = Column(String, nullable=True)   # "claude" | "directory"
+    skip_reason = Column(Text, nullable=False)
+    discovered_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class EnsembleRequest(Base):

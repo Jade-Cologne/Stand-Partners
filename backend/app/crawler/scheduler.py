@@ -11,11 +11,11 @@ _scheduler = BackgroundScheduler()
 
 
 def start_scheduler():
-    # Daily at 06:00 UTC — refresh audition listings
+    # Biweekly at 06:00 UTC — refresh audition listings
     _scheduler.add_job(
         run_daily_crawl,
-        CronTrigger(hour=6, minute=0),
-        id="daily_crawl",
+        CronTrigger(day="1,15", hour=6, minute=0),
+        id="biweekly_crawl",
         replace_existing=True,
         misfire_grace_time=3600,
     )

@@ -12,7 +12,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && playwright install --with-deps chromium
 COPY backend/ .
 RUN mkdir -p uploads/excerpts
 # Copy frontend build into the workdir so the path is predictable

@@ -162,12 +162,58 @@ def _discover_state_via_claude(state: str) -> list[dict]:
         return []
 
 
-def _save_orchestras(orchestras: list[dict], existing_names: set, db) -> int:
+def _verify_url_matches(url: str, name: str, city: str) -> tuple[bool, str]:
+    """Fetch a URL and check it plausibly belongs to this orchestra. Returns (ok, reason)."""
+    try:
+        resp = httpx.get(
+            url,
+            headers={"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"},
+            timeout=10,
+            follow_redirects=True,
+        )
+        if resp.status_code >= 400:
+            return False, f"HTTP {resp.status_code}"
+        text = resp.text.lower()
+        name_words = [w for w in name.lower().split() if len(w) > 3]
+        city_match = city and city.lower() in text
+        name_match = any(w in text for w in name_words)
+        if not city_match and not name_match:
+            return False, "page content does not mention orchestra name or city"
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+
+def _archive_discovery(db, o: dict, source: str, reason: str):
+    db.add(models.DiscoveryArchive(
+        name=o.get("name", ""),
+        city=o.get("city"),
+        state=o.get("state"),
+        country=o.get("country", "US"),
+        website=o.get("website"),
+        type=o.get("type"),
+        discovered_source=source,
+        skip_reason=reason,
+    ))
+
+
+def _save_orchestras(orchestras: list[dict], existing_names: set, db, source: str = "claude") -> int:
     added = 0
     for o in orchestras:
         name = o.get("name", "").strip()
-        if not name or name.lower() in existing_names:
+        if not name:
             continue
+        if name.lower() in existing_names:
+            _archive_discovery(db, o, source, f"duplicate of existing: {name}")
+            continue
+        # Verify provided URL actually matches this orchestra
+        website = o.get("website")
+        if website:
+            ok, reason = _verify_url_matches(website, name, o.get("city", ""))
+            if not ok:
+                _archive_discovery(db, o, source, f"URL verification failed ({reason}): {website}")
+                print(f"[discover] Archived {name}: {reason}")
+                continue
         raw_type = o.get("type", "other")
         try:
             orch_type = models.OrchestraType(raw_type)
@@ -179,9 +225,9 @@ def _save_orchestras(orchestras: list[dict], existing_names: set, db) -> int:
             city=o.get("city", ""),
             state=o.get("state"),
             country=o.get("country", "US"),
-            website=o.get("website"),
+            website=website,
             crawl_enabled=True,
-            source="claude",
+            source=source,
         ))
         existing_names.add(name.lower())
         added += 1
@@ -361,28 +407,13 @@ def run_weekly_discovery():
         existing_names = {o.name.lower() for o in db.query(models.Orchestra).all()}
         added = 0
 
-        for source in DIRECTORY_SOURCES:
+        for src in DIRECTORY_SOURCES:
             if is_cancelled("discover"):
                 print("Directory discovery cancelled.")
                 return
-            orchestras = _discover_from_source(source)
-            for o in orchestras:
-                name = o.get("name", "").strip()
-                if not name or name.lower() in existing_names:
-                    continue
-                new_orch = models.Orchestra(
-                    name=name,
-                    type=source["type"],
-                    city=o.get("city", ""),
-                    state=o.get("state"),
-                    country=o.get("country", "US"),
-                    website=o.get("website"),
-                    crawl_enabled=True,
-                    source="directory",
-                )
-                db.add(new_orch)
-                existing_names.add(name.lower())
-                added += 1
+            orchestras = _discover_from_source(src)
+            batch_added = _save_orchestras(orchestras, existing_names, db, source="directory")
+            added += batch_added
             time.sleep(2)
 
         db.commit()
