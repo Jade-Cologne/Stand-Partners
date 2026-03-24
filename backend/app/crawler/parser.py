@@ -556,6 +556,42 @@ def crawl_orchestra(orchestra: models.Orchestra):
         db.close()
 
 
+def run_geocode_job():
+    """Fill in missing lat/lng for all orchestras: contact page → city/state fallback."""
+    from app.crawler.cancel import is_cancelled, reset
+    from app.crawler.job_log import JobLogger
+    reset("geocode")
+    log = JobLogger("geocode")
+    log.start()
+    print("Starting geocode job...")
+    db = SessionLocal()
+    try:
+        missing = db.query(models.Orchestra).filter(
+            (models.Orchestra.lat.is_(None)) | (models.Orchestra.lng.is_(None))
+        ).all()
+        print(f"Found {len(missing)} orchestras without coordinates")
+        updated = 0
+        for o in missing:
+            if is_cancelled("geocode"):
+                print("Geocode job cancelled.")
+                log.cancel()
+                return
+            website = _norm_url(o.website)
+            _geocode_orchestra(o, venue_address=None, website=website)
+            if o.lat is not None:
+                updated += 1
+            time.sleep(1)
+        db.commit()
+        print(f"Geocode job complete: {updated}/{len(missing)} orchestras geocoded.")
+        log.finish(records=updated)
+    except Exception as e:
+        db.rollback()
+        log.error(str(e))
+        print(f"Geocode job error: {e}")
+    finally:
+        db.close()
+
+
 def run_daily_crawl():
     """Entry point for the APScheduler biweekly job."""
     from app.crawler.cancel import is_cancelled, reset

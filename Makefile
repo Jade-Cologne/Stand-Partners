@@ -4,10 +4,10 @@ export
 BASE_URL ?= https://stand.partners
 STOP = curl -k -X POST "$(BASE_URL)/api/admin/stop" -H "x-admin-key: $(ADMIN_KEY)" -H "Content-Type: application/json"
 
-.PHONY: crawl discover discover-claude enrich-urls discover-all discover-state discover-states \
+.PHONY: crawl discover discover-claude enrich-urls geocode discover-all discover-state discover-states \
         list-no-url list-no-audition-page list-crawl-errors list-archived-discoveries status jobs \
         clean-report clean-data reset-orchestras \
-        stop-crawl stop-discover stop-claude stop-enrich-urls stop-all
+        stop-crawl stop-discover stop-claude stop-enrich-urls stop-geocode stop-all
 
 crawl:
 	curl -k -X POST $(BASE_URL)/api/admin/crawl -H "x-admin-key: $(ADMIN_KEY)"
@@ -20,6 +20,9 @@ discover-claude:
 
 enrich-urls:
 	curl -k -X POST "$(BASE_URL)/api/admin/enrich-urls" -H "x-admin-key: $(ADMIN_KEY)"
+
+geocode:
+	curl -k -X POST "$(BASE_URL)/api/admin/geocode" -H "x-admin-key: $(ADMIN_KEY)"
 
 discover-all:
 	curl -k -X POST "$(BASE_URL)/api/admin/discover?sync=true" -H "x-admin-key: $(ADMIN_KEY)"
@@ -170,8 +173,12 @@ stop-claude:
 stop-enrich-urls:
 	$(STOP) -d '{"job":"enrich_urls"}'
 
+stop-geocode:
+	$(STOP) -d '{"job":"geocode"}'
+
 stop-all:
 	$(STOP) -d '{"job":"crawl"}'
 	$(STOP) -d '{"job":"discover"}'
 	$(STOP) -d '{"job":"discover_claude"}'
 	$(STOP) -d '{"job":"enrich_urls"}'
+	$(STOP) -d '{"job":"geocode"}'

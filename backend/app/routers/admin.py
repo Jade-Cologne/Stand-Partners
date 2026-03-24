@@ -13,6 +13,17 @@ def _require_key(x_admin_key: str = Header(...)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
+@router.post("/geocode")
+def trigger_geocode(x_admin_key: str = Header(...), sync: bool = False):
+    _require_key(x_admin_key)
+    from app.crawler.parser import run_geocode_job
+    if sync:
+        run_geocode_job()
+        return {"status": "geocode complete"}
+    Thread(target=run_geocode_job, daemon=True).start()
+    return {"status": "geocode started"}
+
+
 @router.post("/crawl")
 def trigger_crawl(x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
