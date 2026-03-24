@@ -30,10 +30,12 @@ EXTRACTION_PROMPT = """\
 You are a data extraction assistant for an orchestral audition database.
 
 Below is the raw text of an orchestra's auditions/employment web page.
-Extract every audition listing and any sub-list information you find.
+Extract every audition listing, any sub-list information, and the orchestra's venue address.
 
 Return a JSON object with this exact structure:
 {{
+  "venue_name": "name of the concert hall or venue, or null if not found",
+  "venue_address": "full street address of the orchestra's primary venue, or null if not found",
   "auditions": [
     {{
       "position": "string, e.g. 'Principal Oboe' or 'Section Violin'",
@@ -94,6 +96,23 @@ Respond with only valid JSON array, no markdown fences.
 """
 
 
+def _geocode(query: str) -> Optional[tuple[float, float]]:
+    """Return (lat, lng) for a venue address or city/state using Nominatim."""
+    try:
+        resp = httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1},
+            headers={"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"},
+            timeout=10,
+        )
+        results = resp.json()
+        if results:
+            return float(results[0]["lat"]), float(results[0]["lon"])
+    except Exception as e:
+        print(f"[geocode] Failed for {query!r}: {e}")
+    return None
+
+
 def _fetch_page(url: str) -> Optional[str]:
     """Fetch a URL and return visible text content."""
     try:
@@ -106,7 +125,7 @@ def _fetch_page(url: str) -> Optional[str]:
             tag.decompose()
         return soup.get_text(separator="\n", strip=True)[:12000]  # cap at ~12k chars
     except Exception as e:
-        logger.warning(f"Failed to fetch {url}: {e}")
+        print(f"[crawl] Failed to fetch {url}: {e}")
         return None
 
 
@@ -277,7 +296,7 @@ def crawl_orchestra(orchestra: models.Orchestra):
         # Determine URL to fetch
         url = orchestra.audition_page or orchestra.website
         if not url:
-            logger.info(f"Skipping {orchestra.name}: no URL")
+            print(f"[crawl] Skipping {orchestra.name}: no URL")
             return
 
         # If we only have the homepage, try to find the auditions page
@@ -293,6 +312,15 @@ def crawl_orchestra(orchestra: models.Orchestra):
 
         data = _parse_page(url, text)
 
+        # Geocode if we don't have coordinates yet
+        if orchestra.lat is None or orchestra.lng is None:
+            venue_address = data.get("venue_address")
+            geocode_query = venue_address or f"{orchestra.city}, {orchestra.state}, US"
+            coords = _geocode(geocode_query)
+            if coords:
+                orchestra.lat, orchestra.lng = coords
+                print(f"[geocode] {orchestra.name}: {geocode_query!r} → {coords}")
+
         # Mark all current auditions as inactive — we'll reactivate/create below
         db.query(models.Audition).filter(
             models.Audition.orchestra_id == orchestra.id,
@@ -307,18 +335,18 @@ def crawl_orchestra(orchestra: models.Orchestra):
 
         orchestra.last_crawled_at = datetime.utcnow()
         db.commit()
-        logger.info(f"Crawled {orchestra.name}: {len(data.get('auditions', []))} audition(s)")
+        print(f"[crawl] {orchestra.name}: {len(data.get('auditions', []))} audition(s)")
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Error crawling {orchestra.name}: {e}")
+        print(f"[crawl] Error crawling {orchestra.name}: {e}")
     finally:
         db.close()
 
 
 def run_daily_crawl():
     """Entry point for the APScheduler daily job."""
-    logger.info("Starting daily audition crawl...")
+    print("Starting daily audition crawl...")
     db = SessionLocal()
     try:
         orchestras = db.query(models.Orchestra).filter(
@@ -331,4 +359,4 @@ def run_daily_crawl():
         crawl_orchestra(orchestra)
         time.sleep(1)  # be polite — 1 req/sec
 
-    logger.info("Daily crawl complete.")
+    print("Daily crawl complete.")
