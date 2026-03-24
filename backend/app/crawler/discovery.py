@@ -146,7 +146,7 @@ Start your response with [ and end with ].
 def _discover_state_via_claude(state: str) -> list[dict]:
     message = _client().messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2048,
+        max_tokens=4096,
         messages=[{
             "role": "user",
             "content": CLAUDE_DISCOVERY_PROMPT.format(state=state),
@@ -155,12 +155,12 @@ def _discover_state_via_claude(state: str) -> list[dict]:
     raw = message.content[0].text.strip()
     match = re.search(r"\[.*\]", raw, re.DOTALL)
     if not match:
-        logger.warning(f"No JSON array in Claude response for {state}")
+        print(f"No JSON array in Claude response for {state}. Raw: {raw[:200]!r}")
         return []
     try:
         return json.loads(match.group())
     except Exception as e:
-        logger.error(f"Failed to parse Claude response for {state}: {e}")
+        print(f"Failed to parse Claude response for {state}: {e}")
         return []
 
 
