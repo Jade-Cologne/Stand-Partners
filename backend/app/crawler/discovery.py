@@ -264,6 +264,12 @@ def run_url_enrichment():
         ).all()
         print(f"Found {len(missing)} orchestras without websites")
 
+        # Build a set of URLs already in use so we don't assign duplicates
+        existing_urls = {
+            o.website.rstrip("/").lower()
+            for o in db.query(models.Orchestra).filter(models.Orchestra.website.isnot(None)).all()
+        }
+
         batch_size = 25
         updated = 0
         for i in range(0, len(missing), batch_size):
@@ -296,16 +302,42 @@ def run_url_enrichment():
 
             id_to_url = {r["id"]: r.get("website") for r in results if r.get("website")}
             for o in batch:
-                if o.id in id_to_url:
-                    o.website = id_to_url[o.id]
-                    updated += 1
-                    # Probe for a direct auditions/employment page
-                    if not o.audition_page:
-                        from app.crawler.parser import _find_audition_page
-                        found = _find_audition_page(o.website)
-                        if found:
-                            o.audition_page = found
-                            print(f"[enrich] {o.name}: found audition page {found}")
+                if o.id not in id_to_url:
+                    continue
+                url = id_to_url[o.id]
+                url_key = url.rstrip("/").lower()
+
+                # Skip if this URL is already assigned to another orchestra
+                if url_key in existing_urls:
+                    print(f"[enrich] {o.name}: skipping {url} (already assigned to another orchestra)")
+                    continue
+
+                # Verify the page actually mentions this orchestra's city or name
+                try:
+                    verify_resp = httpx.get(url, headers={"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"}, timeout=10, follow_redirects=True)
+                    page_text = verify_resp.text.lower()
+                    city_match = o.city and o.city.lower() in page_text
+                    name_words = [w for w in o.name.lower().split() if len(w) > 3]
+                    name_match = any(w in page_text for w in name_words)
+                    if not city_match and not name_match:
+                        print(f"[enrich] {o.name}: skipping {url} (page content does not match orchestra)")
+                        continue
+                except Exception:
+                    # If we can't fetch it, skip rather than assign a bad URL
+                    print(f"[enrich] {o.name}: skipping {url} (could not verify)")
+                    continue
+
+                o.website = url
+                existing_urls.add(url_key)
+                updated += 1
+
+                # Probe for a direct auditions/employment page
+                if not o.audition_page:
+                    from app.crawler.parser import _find_audition_page
+                    found = _find_audition_page(o.website)
+                    if found:
+                        o.audition_page = found
+                        print(f"[enrich] {o.name}: found audition page {found}")
             db.commit()
             print(f"[enrich] Batch {i//batch_size + 1}: {len(id_to_url)} URLs found")
             time.sleep(1)
