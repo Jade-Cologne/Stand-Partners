@@ -149,6 +149,7 @@ def _find_audition_page(website: str) -> Optional[str]:
 
 def _parse_page(url: str, text: str) -> dict:
     """Send page text to Claude and get structured audition data."""
+    import re as _re
     message = _client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=4096,
@@ -158,7 +159,16 @@ def _parse_page(url: str, text: str) -> dict:
         }],
     )
     raw = message.content[0].text.strip()
-    return json.loads(raw)
+    # Strip markdown fences if present
+    match = _re.search(r"\{.*\}", raw, _re.DOTALL)
+    if not match:
+        print(f"[crawl] No JSON in Claude response for {url}. Raw: {raw[:200]!r}")
+        return {"auditions": [], "sub_list": {}}
+    try:
+        return json.loads(match.group())
+    except Exception as e:
+        print(f"[crawl] JSON parse error for {url}: {e}")
+        return {"auditions": [], "sub_list": {}}
 
 
 def _normalize_excerpts(raw_text: str) -> list[dict]:
@@ -299,14 +309,28 @@ def crawl_orchestra(orchestra: models.Orchestra):
             print(f"[crawl] Skipping {orchestra.name}: no URL")
             return
 
+        text = _fetch_page(url)
+
+        # If the audition page 404'd or returned nothing, fall back to discovery
+        if not text and orchestra.audition_page:
+            print(f"[crawl] Audition page failed for {orchestra.name}, searching homepage...")
+            orchestra.audition_page = None
+            url = orchestra.website
+            if url:
+                found = _find_audition_page(url)
+                if found:
+                    url = found
+                    orchestra.audition_page = found
+                text = _fetch_page(url) if url else None
+
         # If we only have the homepage, try to find the auditions page
-        if url == orchestra.website:
+        if text is None and url == orchestra.website:
             found = _find_audition_page(url)
             if found:
                 url = found
                 orchestra.audition_page = found
+                text = _fetch_page(url)
 
-        text = _fetch_page(url)
         if not text:
             return
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import { api } from "../api";
 
@@ -156,41 +157,43 @@ export default function Home() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {visible.map((pin) => {
-          const color = TYPE_COLORS[normalizeType(pin.type)];
-          const hasAuditions = pin.active_audition_count > 0;
-          return (
-            <Marker
-              key={pin.id}
-              position={[pin.lat, pin.lng]}
-              icon={createIcon(color, hasAuditions)}
-            >
-              <Popup>
-                <div className="min-w-[160px]">
-                  <p className="font-semibold text-gray-900 mb-0.5">{pin.name}</p>
-                  <p className="text-xs text-gray-500 mb-2">
-                    {pin.city}{pin.state ? `, ${pin.state}` : ""}
-                    {" · "}{TYPE_LABELS[normalizeType(pin.type)]}
-                  </p>
-                  {hasAuditions ? (
-                    <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-medium px-2 py-0.5 rounded-full mb-2">
-                      {pin.active_audition_count} open audition{pin.active_audition_count !== 1 ? "s" : ""}
-                    </span>
-                  ) : (
-                    <span className="inline-block text-xs text-gray-400 mb-2">No current openings</span>
-                  )}
-                  <br />
-                  <button
-                    className="text-xs text-indigo-600 hover:underline"
-                    onClick={() => navigate(`/orchestras/${pin.id}`)}
-                  >
-                    View orchestra →
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+        <MarkerClusterGroup chunkedLoading>
+          {visible.map((pin) => {
+            const color = TYPE_COLORS[normalizeType(pin.type)];
+            const hasAuditions = pin.active_audition_count > 0;
+            return (
+              <Marker
+                key={pin.id}
+                position={[pin.lat, pin.lng]}
+                icon={createIcon(color, hasAuditions)}
+              >
+                <Popup>
+                  <div className="min-w-[160px]">
+                    <p className="font-semibold text-gray-900 mb-0.5">{pin.name}</p>
+                    <p className="text-xs text-gray-500 mb-2">
+                      {pin.city}{pin.state ? `, ${pin.state}` : ""}
+                      {" · "}{TYPE_LABELS[normalizeType(pin.type)]}
+                    </p>
+                    {hasAuditions ? (
+                      <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-medium px-2 py-0.5 rounded-full mb-2">
+                        {pin.active_audition_count} open audition{pin.active_audition_count !== 1 ? "s" : ""}
+                      </span>
+                    ) : (
+                      <span className="inline-block text-xs text-gray-400 mb-2">No current openings</span>
+                    )}
+                    <br />
+                    <button
+                      className="text-xs text-indigo-600 hover:underline"
+                      onClick={() => navigate(`/orchestras/${pin.id}`)}
+                    >
+                      View orchestra →
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MarkerClusterGroup>
       </MapContainer>
       <Legend />
       <FilterPanel filters={filters} setFilters={setFilters} totalPins={visible.length} />

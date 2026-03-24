@@ -131,7 +131,7 @@ Each object must have exactly these fields:
   "city": city name,
   "state": two-letter state code,
   "country": "US",
-  "website": homepage URL string or null,
+  "website": your best guess at the homepage URL based on the orchestra name and city (e.g. www.citysymphony.org) — only use null if you truly have no basis for a guess,
   "type": one of professional | regional | community | youth
 Exclude university, college, conservatory, and student orchestras entirely.
 Only include orchestras open to the general public (professional auditions,
@@ -225,6 +225,74 @@ def run_claude_state_discovery():
     except Exception as e:
         db.rollback()
         print(f"Claude discovery error: {e}")
+    finally:
+        db.close()
+
+
+URL_ENRICHMENT_PROMPT = """\
+For each orchestra below, provide your best guess at the official website URL.
+Most orchestras follow patterns like www.[cityname]symphony.org or www.[name].org.
+Return ONLY a valid JSON array, no other text. Each object:
+  "id": the id field as given,
+  "website": your best guess URL (never null — always make a reasonable guess)
+
+Orchestras:
+{orchestras}
+
+Start your response with [ and end with ].
+"""
+
+
+def run_url_enrichment():
+    """Fill in missing website URLs for orchestras using Claude's best-guess."""
+    print("Starting URL enrichment...")
+    db = SessionLocal()
+    try:
+        missing = db.query(models.Orchestra).filter(
+            models.Orchestra.website.is_(None)
+        ).all()
+        print(f"Found {len(missing)} orchestras without websites")
+
+        batch_size = 25
+        updated = 0
+        for i in range(0, len(missing), batch_size):
+            batch = missing[i:i + batch_size]
+            orchestra_list = "\n".join(
+                f'  {{"id": {o.id}, "name": "{o.name}", "city": "{o.city}", "state": "{o.state}"}}'
+                for o in batch
+            )
+            message = _client().messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                messages=[{
+                    "role": "user",
+                    "content": URL_ENRICHMENT_PROMPT.format(orchestras=orchestra_list),
+                }],
+            )
+            raw = message.content[0].text.strip()
+            match = re.search(r"\[.*\]", raw, re.DOTALL)
+            if not match:
+                print(f"[enrich] No JSON in response for batch {i//batch_size + 1}")
+                continue
+            try:
+                results = json.loads(match.group())
+            except Exception as e:
+                print(f"[enrich] Parse error for batch {i//batch_size + 1}: {e}")
+                continue
+
+            id_to_url = {r["id"]: r.get("website") for r in results if r.get("website")}
+            for o in batch:
+                if o.id in id_to_url:
+                    o.website = id_to_url[o.id]
+                    updated += 1
+            db.commit()
+            print(f"[enrich] Batch {i//batch_size + 1}: {len(id_to_url)} URLs found")
+            time.sleep(1)
+
+        print(f"URL enrichment complete: {updated} orchestras updated.")
+    except Exception as e:
+        db.rollback()
+        print(f"URL enrichment error: {e}")
     finally:
         db.close()
 

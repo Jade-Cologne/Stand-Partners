@@ -50,6 +50,17 @@ class StateRequest(BaseModel):
     state: str
 
 
+@router.post("/enrich-urls")
+def trigger_url_enrichment(x_admin_key: str = Header(...), sync: bool = False):
+    _require_key(x_admin_key)
+    from app.crawler.discovery import run_url_enrichment
+    if sync:
+        run_url_enrichment()
+        return {"status": "url enrichment complete"}
+    Thread(target=run_url_enrichment, daemon=True).start()
+    return {"status": "url enrichment started"}
+
+
 @router.post("/discover-claude-state")
 def trigger_claude_state(payload: StateRequest, x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
