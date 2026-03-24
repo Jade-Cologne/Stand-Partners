@@ -92,7 +92,7 @@ def _discover_from_source(source: dict) -> list[dict]:
         return []
     message = _client().messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=4096,
+        max_tokens=6000,
         messages=[{
             "role": "user",
             "content": DISCOVERY_PROMPT.format(
@@ -144,7 +144,7 @@ Start your response with [ and end with ].
 def _discover_state_via_claude(state: str) -> list[dict]:
     message = _client().messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=4096,
+        max_tokens=6000,
         messages=[{
             "role": "user",
             "content": CLAUDE_DISCOVERY_PROMPT.format(state=state),
