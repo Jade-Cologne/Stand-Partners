@@ -5,7 +5,7 @@ BASE_URL ?= https://stand.partners
 STOP = curl -k -X POST "$(BASE_URL)/api/admin/stop" -H "x-admin-key: $(ADMIN_KEY)" -H "Content-Type: application/json"
 
 .PHONY: crawl discover discover-claude enrich-urls discover-all discover-state discover-states \
-        stop-crawl stop-discover stop-discover-claude stop-enrich-urls stop-all
+        list-no-url stop-crawl stop-discover stop-discover-claude stop-enrich-urls stop-all
 
 crawl:
 	curl -k -X POST $(BASE_URL)/api/admin/crawl -H "x-admin-key: $(ADMIN_KEY)"
@@ -32,6 +32,22 @@ discover-states:
 		curl -k -s -X POST "$(BASE_URL)/api/admin/discover-claude-state" -H "x-admin-key: $(ADMIN_KEY)" -H "Content-Type: application/json" -d "{\"state\":\"$$state\"}" & \
 		sleep 2; \
 	done; wait
+
+define LIST_NO_URL_PY
+import json, sys
+data = json.load(sys.stdin)
+missing = [o for o in data if not o.get('website')]
+missing.sort(key=lambda o: (o.get('state') or '', o.get('name') or ''))
+print(f'Orchestras without a website URL: {len(missing)}\n')
+print(f'{"Name":<50} {"City":<20} {"State":<6} {"Type"}')
+print('-' * 95)
+for o in missing:
+    print(f'{o["name"]:<50} {(o.get("city") or ""):<20} {(o.get("state") or ""):<6} {o.get("type","")}')
+endef
+export LIST_NO_URL_PY
+
+list-no-url:
+	@curl -ks "$(BASE_URL)/api/orchestras" | python3 -c "$$LIST_NO_URL_PY"
 
 stop-crawl:
 	$(STOP) -d '{"job":"crawl"}'
