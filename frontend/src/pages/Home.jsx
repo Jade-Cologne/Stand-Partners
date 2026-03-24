@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import { api } from "../api";
@@ -64,6 +64,69 @@ const PIN_CSS = `
     box-shadow: 0 1px 4px rgba(0,0,0,0.5);
   }
 `;
+
+function PinCard({ pin, onClose, onBack, navigate }) {
+  const hasAuditions = pin.active_audition_count > 0;
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 w-64">
+      <div className="flex items-start justify-between mb-1">
+        <p className="font-semibold text-gray-100 leading-tight pr-2">{pin.name}</p>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none flex-shrink-0">×</button>
+      </div>
+      <p className="text-xs text-gray-400 mb-2">
+        {pin.city}{pin.state ? `, ${pin.state}` : ""}
+        {" · "}{TYPE_LABELS[normalizeType(pin.type)]}
+      </p>
+      {hasAuditions ? (
+        <span className="inline-block bg-indigo-900 text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-full mb-3">
+          {pin.active_audition_count} open audition{pin.active_audition_count !== 1 ? "s" : ""}
+        </span>
+      ) : (
+        <span className="inline-block text-xs text-gray-500 mb-3">No current openings</span>
+      )}
+      <div className="flex items-center gap-3">
+        {onBack && (
+          <button onClick={onBack} className="text-xs text-gray-500 hover:text-gray-300">← Back</button>
+        )}
+        <button
+          className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline"
+          onClick={() => navigate(`/orchestras/${pin.id}`)}
+        >
+          View orchestra →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ClusterList({ pins, onSelect, onClose }) {
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-72 max-h-96 flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+        <p className="font-semibold text-gray-200 text-sm">{pins.length} orchestras</p>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none">×</button>
+      </div>
+      <div className="overflow-y-auto flex-1">
+        {pins.map((pin) => (
+          <button
+            key={pin.id}
+            className="w-full text-left px-4 py-2.5 hover:bg-gray-800 border-b border-gray-800 last:border-0 transition-colors"
+            onClick={() => onSelect(pin)}
+          >
+            <p className="text-sm text-gray-200 leading-tight">{pin.name}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {pin.city}{pin.state ? `, ${pin.state}` : ""}
+              <span className="ml-2 text-gray-600">· {TYPE_LABELS[normalizeType(pin.type)]}</span>
+              {pin.active_audition_count > 0 && (
+                <span className="ml-2 text-indigo-400">· {pin.active_audition_count} open</span>
+              )}
+            </p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Legend() {
   return (
@@ -140,6 +203,9 @@ export default function Home() {
     types: ["professional", "regional", "community", "youth", "other"],
     openingsOnly: false,
   });
+  const [clusterPins, setClusterPins] = useState(null);
+  const [detailPin, setDetailPin] = useState(null);
+  const hoverTimer = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -152,12 +218,31 @@ export default function Home() {
     return p.lat && p.lng;
   });
 
+  const pinByLatLng = useMemo(() => {
+    const m = {};
+    visible.forEach(p => { m[`${p.lat},${p.lng}`] = p; });
+    return m;
+  }, [visible]);
+
+  const handleClusterClick = (e) => {
+    const found = e.layer.getAllChildMarkers()
+      .map(m => pinByLatLng[`${m._latlng.lat},${m._latlng.lng}`])
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (found.length) {
+      setClusterPins(found);
+      setDetailPin(null);
+    }
+  };
+
+  const closeAll = () => { setClusterPins(null); setDetailPin(null); };
+
   return (
     <div className="relative" style={{ height: "calc(100vh - 56px - 41px)" }}>
       <style>{PIN_CSS}</style>
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center z-[2000] bg-white/60">
-          <span className="text-gray-500">Loading orchestras...</span>
+        <div className="absolute inset-0 flex items-center justify-center z-[2000] bg-gray-950/60">
+          <span className="text-gray-400">Loading orchestras...</span>
         </div>
       )}
       <MapContainer
@@ -173,6 +258,8 @@ export default function Home() {
         <MarkerClusterGroup
           chunkedLoading
           maxClusterRadius={40}
+          zoomToBoundsOnClick={false}
+          eventHandlers={{ clusterclick: handleClusterClick }}
           iconCreateFunction={(cluster) =>
             L.divIcon({
               html: `<div class="cluster-badge">${cluster.getChildCount()}</div>`,
@@ -190,37 +277,42 @@ export default function Home() {
                 key={pin.id}
                 position={[pin.lat, pin.lng]}
                 icon={createIcon(color, hasAuditions)}
-              >
-                <Popup>
-                  <div className="min-w-[160px]">
-                    <p className="font-semibold text-gray-900 mb-0.5">{pin.name}</p>
-                    <p className="text-xs text-gray-500 mb-2">
-                      {pin.city}{pin.state ? `, ${pin.state}` : ""}
-                      {" · "}{TYPE_LABELS[normalizeType(pin.type)]}
-                    </p>
-                    {hasAuditions ? (
-                      <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-medium px-2 py-0.5 rounded-full mb-2">
-                        {pin.active_audition_count} open audition{pin.active_audition_count !== 1 ? "s" : ""}
-                      </span>
-                    ) : (
-                      <span className="inline-block text-xs text-gray-400 mb-2">No current openings</span>
-                    )}
-                    <br />
-                    <button
-                      className="text-xs text-indigo-600 hover:underline"
-                      onClick={() => navigate(`/orchestras/${pin.id}`)}
-                    >
-                      View orchestra →
-                    </button>
-                  </div>
-                </Popup>
-              </Marker>
+                eventHandlers={{
+                  mouseover: () => {
+                    hoverTimer.current = setTimeout(() => {
+                      setDetailPin(pin);
+                      setClusterPins(null);
+                    }, 700);
+                  },
+                  mouseout: () => clearTimeout(hoverTimer.current),
+                  click: () => {
+                    clearTimeout(hoverTimer.current);
+                    setDetailPin(pin);
+                    setClusterPins(null);
+                  },
+                }}
+              />
             );
           })}
         </MarkerClusterGroup>
       </MapContainer>
       <Legend />
       <FilterPanel filters={filters} setFilters={setFilters} totalPins={visible.length} />
+      {clusterPins && !detailPin && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]">
+          <ClusterList pins={clusterPins} onSelect={(pin) => setDetailPin(pin)} onClose={closeAll} />
+        </div>
+      )}
+      {detailPin && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]">
+          <PinCard
+            pin={detailPin}
+            onClose={closeAll}
+            onBack={clusterPins ? () => setDetailPin(null) : null}
+            navigate={navigate}
+          />
+        </div>
+      )}
     </div>
   );
 }

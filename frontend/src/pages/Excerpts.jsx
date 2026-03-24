@@ -24,7 +24,7 @@ export default function Excerpts() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Excerpt Library</h1>
+      <h1 className="text-2xl font-bold text-gray-100 mb-1">Excerpt Library</h1>
       <p className="text-sm text-gray-500 mb-6">
         Excerpts referenced in active audition listings. PDFs added as available.
       </p>
@@ -34,12 +34,12 @@ export default function Excerpts() {
         <input
           type="text"
           placeholder="Search by title, composer, or work..."
-          className="flex-1 min-w-48 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          className="flex-1 min-w-48 text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          className="text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           value={instrument}
           onChange={(e) => setInstrument(e.target.value)}
         >
@@ -51,16 +51,16 @@ export default function Excerpts() {
       </div>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading excerpts...</p>
+        <p className="text-gray-500 text-sm">Loading excerpts...</p>
       ) : excerpts.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-gray-500">
           <p>No excerpts found.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
+              <tr className="bg-gray-900 border-b border-gray-700 text-left text-xs text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-3">Title</th>
                 <th className="px-4 py-3">Composer</th>
                 <th className="px-4 py-3">Instrument</th>
@@ -70,14 +70,14 @@ export default function Excerpts() {
             </thead>
             <tbody>
               {excerpts.map((exc) => (
-                <tr key={exc.id} className="border-b border-gray-100 hover:bg-gray-50 last:border-0">
+                <tr key={exc.id} className="border-b border-gray-700 hover:bg-gray-700/50 last:border-0 transition-colors">
                   <td className="px-4 py-3">
-                    <Link to={`/excerpts/${exc.id}`} className="text-indigo-600 hover:underline font-medium">
+                    <Link to={`/excerpts/${exc.id}`} className="text-indigo-400 hover:underline font-medium">
                       {exc.title}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-gray-700">{exc.composer}</td>
-                  <td className="px-4 py-3 text-gray-600 capitalize">{exc.instrument}</td>
+                  <td className="px-4 py-3 text-gray-300">{exc.composer}</td>
+                  <td className="px-4 py-3 text-gray-400 capitalize">{exc.instrument}</td>
                   <td className="px-4 py-3 text-gray-500">{exc.movement || "—"}</td>
                   <td className="px-4 py-3">
                     {exc.pdf_path ? (
@@ -85,12 +85,12 @@ export default function Excerpts() {
                         href={`/${exc.pdf_path}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-indigo-600 hover:underline"
+                        className="text-indigo-400 hover:underline"
                       >
                         Download
                       </a>
                     ) : (
-                      <span className="text-gray-400 text-xs">Not yet available</span>
+                      <span className="text-gray-600 text-xs">Not yet available</span>
                     )}
                   </td>
                 </tr>

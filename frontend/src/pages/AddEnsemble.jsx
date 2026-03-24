@@ -41,7 +41,7 @@ export default function AddEnsemble() {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <div className="text-4xl mb-4">✓</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Request submitted</h1>
+        <h1 className="text-xl font-bold text-gray-100 mb-2">Request submitted</h1>
         <p className="text-gray-500 text-sm">
           Thank you! We'll review your submission and add the ensemble to the map.
         </p>
@@ -50,12 +50,12 @@ export default function AddEnsemble() {
   }
 
   const inputClass =
-    "w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300";
-  const labelClass = "block text-xs font-medium text-gray-600 mb-1";
+    "w-full text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const labelClass = "block text-xs font-medium text-gray-500 mb-1";
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Add Your Ensemble</h1>
+      <h1 className="text-2xl font-bold text-gray-100 mb-1">Add Your Ensemble</h1>
       <p className="text-gray-500 text-sm mb-8">
         Know of an orchestra that should be on stand.partners? Submit it here and
         we'll add it to the directory and start tracking their audition listings.
@@ -125,7 +125,7 @@ export default function AddEnsemble() {
           />
         </div>
 
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
 
         <button
           type="submit"
