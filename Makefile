@@ -5,7 +5,7 @@ BASE_URL ?= https://stand.partners
 STOP = curl -k -X POST "$(BASE_URL)/api/admin/stop" -H "x-admin-key: $(ADMIN_KEY)" -H "Content-Type: application/json"
 
 .PHONY: crawl discover discover-claude enrich-urls discover-all discover-state discover-states \
-        list-no-url list-no-audition-page list-crawl-errors status jobs \
+        list-no-url list-no-audition-page list-crawl-errors list-archived-discoveries status jobs \
         clean-report clean-data reset-orchestras \
         stop-crawl stop-discover stop-claude stop-enrich-urls stop-all
 
@@ -89,6 +89,25 @@ export LIST_NO_AUDITION_PAGE_PY
 
 list-no-audition-page:
 	@curl -ksL "$(BASE_URL)/api/orchestras/?limit=500" | python3 -c "$$LIST_NO_AUDITION_PAGE_PY"
+
+define LIST_ARCHIVED_PY
+import json, sys
+raw = json.load(sys.stdin)
+data = raw if isinstance(raw, list) else []
+state_filter = None
+if len(sys.argv) > 1:
+    state_filter = sys.argv[1].upper()
+    data = [r for r in data if (r.get('state') or '').upper() == state_filter]
+print(f'Archived discoveries: {len(data)}\n')
+print(f'{"Name":<50} {"City":<20} {"St":<4} {"Reason"}')
+print('-' * 120)
+for r in data:
+    print(f'{(r.get("name") or ""):<50} {(r.get("city") or ""):<20} {(r.get("state") or ""):<4} {r.get("skip_reason","")[:60]}')
+endef
+export LIST_ARCHIVED_PY
+
+list-archived-discoveries:
+	@curl -ksL "$(BASE_URL)/api/admin/discovery-archive?limit=500" -H "x-admin-key: $(ADMIN_KEY)" | python3 -c "$$LIST_ARCHIVED_PY"
 
 define STATUS_PY
 import json, sys

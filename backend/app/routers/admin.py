@@ -183,6 +183,36 @@ def trigger_clean(x_admin_key: str = Header(...), dry_run: bool = True):
     return run_data_clean(dry_run=dry_run)
 
 
+@router.get("/discovery-archive")
+def discovery_archive(x_admin_key: str = Header(...), state: str = None, reason: str = None, limit: int = 200):
+    _require_key(x_admin_key)
+    from app.database import SessionLocal
+    from app import models
+    db = SessionLocal()
+    try:
+        q = db.query(models.DiscoveryArchive)
+        if state:
+            q = q.filter(models.DiscoveryArchive.state == state)
+        if reason:
+            q = q.filter(models.DiscoveryArchive.skip_reason.ilike(f"%{reason}%"))
+        rows = q.order_by(models.DiscoveryArchive.state, models.DiscoveryArchive.name).limit(limit).all()
+        return [
+            {
+                "id": r.id,
+                "name": r.name,
+                "city": r.city,
+                "state": r.state,
+                "website": r.website,
+                "type": r.type,
+                "skip_reason": r.skip_reason,
+                "discovered_at": r.discovered_at.isoformat() if r.discovered_at else None,
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
 @router.post("/discover-claude-state")
 def trigger_claude_state(payload: StateRequest, x_admin_key: str = Header(...), sync: bool = False):
     _require_key(x_admin_key)
