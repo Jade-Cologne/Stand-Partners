@@ -268,13 +268,14 @@ export default function Home() {
                 icon={createIcon(color, hasAuditions)}
                 eventHandlers={{
                   mouseover: (e) => {
+                    clearTimeout(hoverTimer.current);
                     const { x, y } = e.containerPoint;
-                    hoverTimer.current = setTimeout(() => {
-                      setDetailPin({ pin, x, y });
-                      setClusterPins(null);
-                    }, 700);
+                    setDetailPin({ pin, x, y });
+                    setClusterPins(null);
                   },
-                  mouseout: () => clearTimeout(hoverTimer.current),
+                  mouseout: () => {
+                    hoverTimer.current = setTimeout(closeAll, 2000);
+                  },
                   click: (e) => {
                     clearTimeout(hoverTimer.current);
                     setDetailPin({ pin, x: e.containerPoint.x, y: e.containerPoint.y });
@@ -300,6 +301,8 @@ export default function Home() {
               ? { left: detailPin.x, top: detailPin.y, transform: "translate(-50%, calc(-100% - 14px))" }
               : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
           }
+          onMouseEnter={() => clearTimeout(hoverTimer.current)}
+          onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, 2000); }}
         >
           <PinCard
             pin={detailPin.pin}
