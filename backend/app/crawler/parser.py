@@ -306,7 +306,6 @@ def crawl_orchestra(orchestra: models.Orchestra):
         # Determine URL to fetch
         url = orchestra.audition_page or orchestra.website
         if not url:
-            print(f"[crawl] Skipping {orchestra.name}: no URL")
             return
 
         text = _fetch_page(url)
