@@ -121,6 +121,19 @@ class AuditionExcerpt(Base):
     excerpt = relationship("Excerpt", back_populates="audition_links")
 
 
+class JobRun(Base):
+    """Records each background job execution for visibility."""
+    __tablename__ = "job_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job = Column(String, nullable=False, index=True)   # crawl | discover | discover_claude | enrich_urls
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default="running")  # running | completed | cancelled | error
+    records_processed = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+
+
 class DiscoveryArchive(Base):
     """Orchestras that were discovered but failed verification or were duplicates."""
     __tablename__ = "discovery_archive"

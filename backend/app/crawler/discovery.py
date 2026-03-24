@@ -258,7 +258,10 @@ def run_claude_state_discovery_for(state: str):
 def run_claude_state_discovery():
     """Query Claude for orchestras in each US state and add new ones to the DB."""
     from app.crawler.cancel import is_cancelled, reset
+    from app.crawler.job_log import JobLogger
     reset("discover_claude")
+    log = JobLogger("discover_claude")
+    log.start()
     print("Starting Claude state-by-state discovery...")
     db = SessionLocal()
     try:
@@ -268,6 +271,7 @@ def run_claude_state_discovery():
         for state in US_STATES:
             if is_cancelled("discover_claude"):
                 print("Claude discovery cancelled.")
+                log.cancel()
                 return
             print(f"[discover-claude] {state}...")
             orchestras = _discover_state_via_claude(state)
@@ -278,8 +282,10 @@ def run_claude_state_discovery():
             time.sleep(1)
 
         print(f"Claude discovery complete: {total_added} new orchestras added.")
+        log.finish(records=total_added)
     except Exception as e:
         db.rollback()
+        log.error(str(e))
         print(f"Claude discovery error: {e}")
     finally:
         db.close()
@@ -302,7 +308,10 @@ Start your response with [ and end with ].
 def run_url_enrichment():
     """Fill in missing website URLs for orchestras using Claude's best-guess."""
     from app.crawler.cancel import is_cancelled, reset
+    from app.crawler.job_log import JobLogger
     reset("enrich_urls")
+    log = JobLogger("enrich_urls")
+    log.start()
     print("Starting URL enrichment...")
     db = SessionLocal()
     try:
@@ -390,8 +399,10 @@ def run_url_enrichment():
             time.sleep(1)
 
         print(f"URL enrichment complete: {updated} orchestras updated.")
+        log.finish(records=updated)
     except Exception as e:
         db.rollback()
+        log.error(str(e))
         print(f"URL enrichment error: {e}")
     finally:
         db.close()
@@ -400,7 +411,10 @@ def run_url_enrichment():
 def run_weekly_discovery():
     """Entry point for the APScheduler weekly job."""
     from app.crawler.cancel import is_cancelled, reset
+    from app.crawler.job_log import JobLogger
     reset("discover")
+    log = JobLogger("discover")
+    log.start()
     print("Starting weekly directory discovery...")
     db = SessionLocal()
     try:
@@ -418,8 +432,10 @@ def run_weekly_discovery():
 
         db.commit()
         print(f"Directory discovery complete: {added} new orchestras added.")
+        log.finish(records=added)
     except Exception as e:
         db.rollback()
+        log.error(str(e))
         print(f"Directory discovery error: {e}")
     finally:
         db.close()

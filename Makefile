@@ -5,7 +5,7 @@ BASE_URL ?= https://stand.partners
 STOP = curl -k -X POST "$(BASE_URL)/api/admin/stop" -H "x-admin-key: $(ADMIN_KEY)" -H "Content-Type: application/json"
 
 .PHONY: crawl discover discover-claude enrich-urls discover-all discover-state discover-states \
-        list-no-url list-no-audition-page list-crawl-errors status \
+        list-no-url list-no-audition-page list-crawl-errors status jobs \
         clean-report clean-data reset-orchestras \
         stop-crawl stop-discover stop-claude stop-enrich-urls stop-all
 
@@ -124,6 +124,9 @@ export STATUS_PY
 
 status:
 	@curl -ksL "$(BASE_URL)/api/orchestras/?limit=500" | python3 -c "$$STATUS_PY"
+
+jobs:
+	@curl -ksL "$(BASE_URL)/api/admin/jobs" -H "x-admin-key: $(ADMIN_KEY)" | python3 -m json.tool
 
 reset-orchestras:
 	curl -k -X POST "$(BASE_URL)/api/admin/reset-orchestras" -H "x-admin-key: $(ADMIN_KEY)"

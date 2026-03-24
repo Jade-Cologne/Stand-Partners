@@ -55,6 +55,18 @@ async def lifespan(app: FastAPI):
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_orchestras_type ON orchestras(type)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_auditions_orchestra_active ON auditions(orchestra_id, active)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_auditions_archived ON auditions(archived_at)"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS job_runs (
+                id SERIAL PRIMARY KEY,
+                job VARCHAR NOT NULL,
+                started_at TIMESTAMP NOT NULL,
+                ended_at TIMESTAMP,
+                status VARCHAR NOT NULL DEFAULT 'running',
+                records_processed INTEGER,
+                notes TEXT
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_job_runs_job ON job_runs(job)"))
         conn.commit()
 
     # Ensure upload directory exists

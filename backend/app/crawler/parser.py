@@ -467,10 +467,13 @@ def crawl_orchestra(orchestra: models.Orchestra):
 
 
 def run_daily_crawl():
-    """Entry point for the APScheduler daily job."""
+    """Entry point for the APScheduler biweekly job."""
     from app.crawler.cancel import is_cancelled, reset
+    from app.crawler.job_log import JobLogger
     reset("crawl")
-    print("Starting daily audition crawl...")
+    log = JobLogger("crawl")
+    log.start()
+    print("Starting audition crawl...")
     db = SessionLocal()
     try:
         orchestras = db.query(models.Orchestra).filter(
@@ -480,13 +483,17 @@ def run_daily_crawl():
         db.close()
 
     skip_cutoff = datetime.utcnow() - timedelta(days=12)
+    processed = 0
     for orchestra in orchestras:
         if is_cancelled("crawl"):
-            print("Daily crawl cancelled.")
+            print("Crawl cancelled.")
+            log.cancel()
             return
         if orchestra.last_crawled_at and orchestra.last_crawled_at > skip_cutoff:
             continue
         crawl_orchestra(orchestra)
-        time.sleep(1)  # be polite — 1 req/sec
+        processed += 1
+        time.sleep(1)
 
-    print("Daily crawl complete.")
+    print(f"Crawl complete. {processed} orchestras processed.")
+    log.finish(records=processed)

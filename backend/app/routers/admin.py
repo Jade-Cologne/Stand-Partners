@@ -119,6 +119,31 @@ def delete_orchestra(orchestra_id: int, x_admin_key: str = Header(...)):
         db.close()
 
 
+@router.get("/jobs")
+def job_history(x_admin_key: str = Header(...), limit: int = 20):
+    _require_key(x_admin_key)
+    from app.database import SessionLocal
+    from app import models
+    db = SessionLocal()
+    try:
+        runs = db.query(models.JobRun).order_by(models.JobRun.started_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": r.id,
+                "job": r.job,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+                "status": r.status,
+                "records_processed": r.records_processed,
+                "notes": r.notes,
+                "duration_s": round((r.ended_at - r.started_at).total_seconds()) if r.ended_at else None,
+            }
+            for r in runs
+        ]
+    finally:
+        db.close()
+
+
 @router.post("/reset-orchestras")
 def reset_orchestras(x_admin_key: str = Header(...)):
     _require_key(x_admin_key)
