@@ -46,8 +46,20 @@ def trigger_claude_discovery(x_admin_key: str = Header(...), sync: bool = False)
     return {"status": "claude state-by-state discovery started"}
 
 
+class StopRequest(BaseModel):
+    job: str
+
+
 class StateRequest(BaseModel):
     state: str
+
+
+@router.post("/stop")
+def stop_job(payload: StopRequest, x_admin_key: str = Header(...)):
+    _require_key(x_admin_key)
+    from app.crawler.cancel import request_cancel
+    request_cancel(payload.job)
+    return {"status": f"cancel requested for {payload.job}"}
 
 
 @router.post("/enrich-urls")

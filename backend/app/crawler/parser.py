@@ -370,6 +370,8 @@ def crawl_orchestra(orchestra: models.Orchestra):
 
 def run_daily_crawl():
     """Entry point for the APScheduler daily job."""
+    from app.crawler.cancel import is_cancelled, reset
+    reset("crawl")
     print("Starting daily audition crawl...")
     db = SessionLocal()
     try:
@@ -380,6 +382,9 @@ def run_daily_crawl():
         db.close()
 
     for orchestra in orchestras:
+        if is_cancelled("crawl"):
+            print("Daily crawl cancelled.")
+            return
         crawl_orchestra(orchestra)
         time.sleep(1)  # be polite — 1 req/sec
 

@@ -189,7 +189,11 @@ def _save_orchestras(orchestras: list[dict], existing_names: set, db) -> int:
 
 def run_claude_state_discovery_for(state: str):
     """Discover orchestras in a single state."""
+    from app.crawler.cancel import is_cancelled
     print(f"Starting Claude discovery for {state}...")
+    if is_cancelled("discover_claude"):
+        print(f"Claude discovery cancelled before {state}.")
+        return
     db = SessionLocal()
     try:
         existing_names = {o.name.lower() for o in db.query(models.Orchestra).all()}
@@ -206,6 +210,8 @@ def run_claude_state_discovery_for(state: str):
 
 def run_claude_state_discovery():
     """Query Claude for orchestras in each US state and add new ones to the DB."""
+    from app.crawler.cancel import is_cancelled, reset
+    reset("discover_claude")
     print("Starting Claude state-by-state discovery...")
     db = SessionLocal()
     try:
@@ -213,6 +219,9 @@ def run_claude_state_discovery():
         total_added = 0
 
         for state in US_STATES:
+            if is_cancelled("discover_claude"):
+                print("Claude discovery cancelled.")
+                return
             print(f"[discover-claude] {state}...")
             orchestras = _discover_state_via_claude(state)
             added = _save_orchestras(orchestras, existing_names, db)
@@ -245,6 +254,8 @@ Start your response with [ and end with ].
 
 def run_url_enrichment():
     """Fill in missing website URLs for orchestras using Claude's best-guess."""
+    from app.crawler.cancel import is_cancelled, reset
+    reset("enrich_urls")
     print("Starting URL enrichment...")
     db = SessionLocal()
     try:
@@ -256,6 +267,9 @@ def run_url_enrichment():
         batch_size = 25
         updated = 0
         for i in range(0, len(missing), batch_size):
+            if is_cancelled("enrich_urls"):
+                print("URL enrichment cancelled.")
+                return
             batch = missing[i:i + batch_size]
             orchestra_list = "\n".join(
                 f'  {{"id": {o.id}, "name": "{o.name}", "city": "{o.city}", "state": "{o.state}"}}'
@@ -299,6 +313,8 @@ def run_url_enrichment():
 
 def run_weekly_discovery():
     """Entry point for the APScheduler weekly job."""
+    from app.crawler.cancel import is_cancelled, reset
+    reset("discover")
     print("Starting weekly directory discovery...")
     db = SessionLocal()
     try:
@@ -306,6 +322,9 @@ def run_weekly_discovery():
         added = 0
 
         for source in DIRECTORY_SOURCES:
+            if is_cancelled("discover"):
+                print("Directory discovery cancelled.")
+                return
             orchestras = _discover_from_source(source)
             for o in orchestras:
                 name = o.get("name", "").strip()
