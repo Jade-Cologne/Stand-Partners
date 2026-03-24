@@ -11,12 +11,13 @@ from app.database import SessionLocal
 from app import models
 
 
-# Words that appear in nearly every ensemble name and carry no distinguishing info
+# Strip only the pure ensemble-type nouns that carry no identity on their own.
+# Qualifier words like "youth", "chamber", "pops", "civic", "metropolitan" etc.
+# are intentionally kept — they distinguish different ensembles in the same city.
 GENERIC_WORDS = {
-    "symphony", "orchestra", "philharmonic", "chamber", "ensemble",
-    "pops", "sinfonia", "sinfonietta", "youth", "civic", "municipal",
-    "metropolitan", "metro", "music", "musical", "association",
-    "society", "foundation", "the", "of", "and", "a", "an",
+    "symphony", "orchestra", "philharmonic",
+    "music", "musical", "association", "society", "foundation",
+    "the", "of", "and", "a", "an",
 }
 
 
