@@ -10,14 +10,14 @@ function Nav() {
   const linkClass = ({ isActive }) =>
     `text-sm font-medium px-3 py-1.5 rounded transition-colors ${
       isActive
-        ? "bg-indigo-600 text-white"
-        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+        ? "bg-indigo-700 text-white"
+        : "text-gray-400 hover:text-white hover:bg-gray-800"
     }`;
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-[1000]">
+    <header className="bg-gray-950 border-b border-gray-800 sticky top-0 z-[1000]">
       <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 h-14">
-        <NavLink to="/" className="font-bold text-indigo-600 text-lg mr-4 hover:text-indigo-700">
+        <NavLink to="/" className="font-bold text-indigo-400 text-lg mr-4 hover:text-indigo-300">
           stand.partners
         </NavLink>
         <NavLink to="/auditions" className={linkClass}>Auditions</NavLink>
@@ -32,7 +32,7 @@ function Nav() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen bg-gray-50">
+      <div className="flex flex-col min-h-screen bg-gray-950">
         <Nav />
         <main className="flex-1">
           <Routes>
@@ -44,7 +44,7 @@ export default function App() {
             <Route path="/add-ensemble" element={<AddEnsemble />} />
           </Routes>
         </main>
-        <footer className="text-center text-xs text-gray-400 py-4 border-t border-gray-200 bg-white">
+        <footer className="text-center text-xs text-gray-500 py-4 border-t border-gray-800 bg-gray-950">
           stand.partners — audition listings updated daily
         </footer>
       </div>

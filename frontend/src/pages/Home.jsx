@@ -26,7 +26,7 @@ function normalizeType(type) {
 }
 
 // Extra transparent padding increases the hover/click area without changing visual size
-const PAD = 8;
+const PAD = 4;
 const SVG_SIZE = 22;
 const ICON_SIZE = SVG_SIZE + PAD * 2;
 
@@ -50,19 +50,32 @@ function createIcon(color, hasAuditions) {
 const PIN_CSS = `
   .orch-pin { cursor: pointer; transition: transform 0.12s ease, filter 0.12s ease; }
   .orch-pin:hover { transform: scale(1.45); filter: brightness(0.72); }
+  .cluster-badge {
+    width: 34px; height: 34px;
+    background: rgba(15, 23, 42, 0.88);
+    border: 2px solid rgba(255,255,255,0.35);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
 `;
 
 function Legend() {
   return (
-    <div className="absolute bottom-8 left-4 z-[1000] bg-white rounded-lg shadow-lg p-3 text-sm">
-      <p className="font-semibold text-gray-700 mb-2">Orchestra type</p>
+    <div className="absolute bottom-8 left-4 z-[1000] bg-gray-900/90 rounded-lg shadow-lg p-3 text-sm border border-gray-700">
+      <p className="font-semibold text-gray-200 mb-2">Orchestra type</p>
       {Object.entries(TYPE_LABELS).map(([type, label]) => (
         <div key={type} className="flex items-center gap-2 mb-1">
           <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: TYPE_COLORS[type] }} />
-          <span className="text-gray-600">{label}</span>
+          <span className="text-gray-400">{label}</span>
         </div>
       ))}
-      <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
+      <div className="border-t border-gray-700 mt-2 pt-2 space-y-1">
         <div className="flex items-center gap-2">
           <svg width="13" height="13" viewBox="0 0 13 13">
             <circle cx="6.5" cy="6.5" r="5" fill="#6b7280" fillOpacity="0.65" stroke="white" strokeWidth="1"/>
@@ -82,12 +95,12 @@ function Legend() {
 
 function FilterPanel({ filters, setFilters, totalPins }) {
   return (
-    <div className="absolute top-4 right-4 z-[1000] bg-white rounded-lg shadow-lg p-4 w-56">
-      <p className="font-semibold text-gray-700 mb-3">Filter map</p>
+    <div className="absolute top-4 right-4 z-[1000] bg-gray-900/90 rounded-lg shadow-lg p-4 w-56 border border-gray-700">
+      <p className="font-semibold text-gray-200 mb-3">Filter map</p>
       <div className="mb-3">
         <label className="text-xs text-gray-500 mb-1 block">Orchestra type</label>
         {Object.entries(TYPE_LABELS).map(([type, label]) => (
-          <label key={type} className="flex items-center gap-2 text-sm text-gray-700 mb-1 cursor-pointer">
+          <label key={type} className="flex items-center gap-2 text-sm text-gray-300 mb-1 cursor-pointer">
             <input
               type="checkbox"
               checked={filters.types.includes(type)}
@@ -106,7 +119,7 @@ function FilterPanel({ filters, setFilters, totalPins }) {
       </div>
       <div className="mb-3">
         <label className="text-xs text-gray-500 mb-1 block">Openings only</label>
-        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
           <input
             type="checkbox"
             checked={filters.openingsOnly}
@@ -115,7 +128,7 @@ function FilterPanel({ filters, setFilters, totalPins }) {
           Show orchestras with open auditions
         </label>
       </div>
-      <p className="text-xs text-gray-400">{totalPins} orchestras shown</p>
+      <p className="text-xs text-gray-500">{totalPins} orchestras shown</p>
     </div>
   );
 }
@@ -154,10 +167,21 @@ export default function Home() {
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
-        <MarkerClusterGroup chunkedLoading>
+        <MarkerClusterGroup
+          chunkedLoading
+          maxClusterRadius={40}
+          iconCreateFunction={(cluster) =>
+            L.divIcon({
+              html: `<div class="cluster-badge">${cluster.getChildCount()}</div>`,
+              className: "",
+              iconSize: [34, 34],
+              iconAnchor: [17, 17],
+            })
+          }
+        >
           {visible.map((pin) => {
             const color = TYPE_COLORS[normalizeType(pin.type)];
             const hasAuditions = pin.active_audition_count > 0;
