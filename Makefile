@@ -6,7 +6,7 @@ STOP = curl -k -X POST "$(BASE_URL)/api/admin/stop" -H "x-admin-key: $(ADMIN_KEY
 
 .PHONY: crawl discover discover-claude enrich-urls discover-all discover-state discover-states \
         list-no-url list-no-audition-page list-crawl-errors status \
-        clean-report clean-data \
+        clean-report clean-data reset-orchestras \
         stop-crawl stop-discover stop-claude stop-enrich-urls stop-all
 
 crawl:
@@ -116,6 +116,9 @@ export STATUS_PY
 
 status:
 	@curl -ksL "$(BASE_URL)/api/orchestras/" | python3 -c "$$STATUS_PY"
+
+reset-orchestras:
+	curl -k -X POST "$(BASE_URL)/api/admin/reset-orchestras" -H "x-admin-key: $(ADMIN_KEY)"
 
 clean-report:
 	@curl -ksL -X POST "$(BASE_URL)/api/admin/clean?dry_run=true" -H "x-admin-key: $(ADMIN_KEY)" | python3 -m json.tool

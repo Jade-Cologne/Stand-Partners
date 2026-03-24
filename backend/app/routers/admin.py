@@ -117,6 +117,22 @@ def delete_orchestra(orchestra_id: int, x_admin_key: str = Header(...)):
         db.close()
 
 
+@router.post("/reset-orchestras")
+def reset_orchestras(x_admin_key: str = Header(...)):
+    _require_key(x_admin_key)
+    from app.database import SessionLocal
+    from app import models
+    db = SessionLocal()
+    try:
+        deleted = db.query(models.Orchestra).filter(
+            models.Orchestra.source.notin_(["seed", "manual"])
+        ).delete(synchronize_session=False)
+        db.commit()
+        return {"status": "reset complete", "deleted": deleted}
+    finally:
+        db.close()
+
+
 @router.post("/clean")
 def trigger_clean(x_admin_key: str = Header(...), dry_run: bool = True):
     _require_key(x_admin_key)

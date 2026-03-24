@@ -236,12 +236,14 @@ SEED_ORCHESTRAS = [
 def seed():
     db = SessionLocal()
     try:
-        existing = {o.name for o in db.query(Orchestra.name).all()}
+        existing = {o.name: o for o in db.query(Orchestra).all()}
         added = 0
         for data in SEED_ORCHESTRAS:
             if data["name"] not in existing:
-                db.add(Orchestra(**data))
+                db.add(Orchestra(**data, source="seed"))
                 added += 1
+            elif existing[data["name"]].source != "seed":
+                existing[data["name"]].source = "seed"
         db.commit()
         print(f"Seeded {added} orchestras ({len(existing)} already existed).")
     finally:

@@ -181,6 +181,7 @@ def _save_orchestras(orchestras: list[dict], existing_names: set, db) -> int:
             country=o.get("country", "US"),
             website=o.get("website"),
             crawl_enabled=True,
+            source="claude",
         ))
         existing_names.add(name.lower())
         added += 1
@@ -377,6 +378,7 @@ def run_weekly_discovery():
                     country=o.get("country", "US"),
                     website=o.get("website"),
                     crawl_enabled=True,
+                    source="directory",
                 )
                 db.add(new_orch)
                 existing_names.add(name.lower())

@@ -103,6 +103,7 @@ class OrchestraOut(OrchestraBase):
     added_at: datetime
     last_crawled_at: Optional[datetime] = None
     crawl_error: Optional[str] = None
+    source: Optional[str] = None
     active_audition_count: int = 0
     sub_list_info: Optional[SubListInfoOut] = None
 
