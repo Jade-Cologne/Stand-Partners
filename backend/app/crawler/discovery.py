@@ -132,7 +132,10 @@ Each object must have exactly these fields:
   "state": two-letter state code,
   "country": "US",
   "website": homepage URL string or null,
-  "type": one of professional | regional | community | youth | other
+  "type": one of professional | regional | community | youth
+Exclude university, college, conservatory, and student orchestras entirely.
+Only include orchestras open to the general public (professional auditions,
+community participation, or youth programs not tied to a school).
 Only include orchestras you are confident exist. Do not hallucinate.
 Start your response with [ and end with ].
 """
