@@ -163,6 +163,58 @@ def _fetch_page_playwright(url: str) -> Optional[str]:
         return None
 
 
+CONTACT_ADDRESS_PROMPT = """\
+Extract only the physical street address from this text (e.g. "123 Main St, Springfield, IL 62701").
+Return just the address as a single string, or null if no street address is present.
+Ignore mailing addresses, PO boxes, and email addresses.
+Text:
+---
+{text}
+---
+Return only the address string or null, no other text.
+"""
+
+
+def _find_address_on_site(website: str) -> Optional[str]:
+    """Look for a contact/about/location page and extract a physical address from it."""
+    contact_keywords = {"contact", "about", "location", "directions", "visit", "venue", "hall"}
+    headers = {"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"}
+    try:
+        resp = httpx.get(website, headers=headers, timeout=15, follow_redirects=True)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+        from urllib.parse import urljoin
+        contact_url = None
+        for a in soup.find_all("a", href=True):
+            link_text = a.get_text(strip=True).lower()
+            href = a["href"].strip().lower()
+            if any(kw in link_text or kw in href for kw in contact_keywords):
+                contact_url = urljoin(website, a["href"].strip())
+                break
+        if not contact_url:
+            return None
+        resp2 = httpx.get(contact_url, headers=headers, timeout=15, follow_redirects=True)
+        resp2.raise_for_status()
+        soup2 = BeautifulSoup(resp2.text, "lxml")
+        for tag in soup2(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        text = soup2.get_text(separator="\n", strip=True)[:4000]
+    except Exception as e:
+        print(f"[geocode] Contact page fetch failed for {website}: {e}")
+        return None
+
+    message = _client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=128,
+        messages=[{"role": "user", "content": CONTACT_ADDRESS_PROMPT.format(text=text)}],
+    )
+    result = message.content[0].text.strip()
+    if result.lower() == "null" or not result:
+        return None
+    print(f"[geocode] Found address on contact page: {result!r}")
+    return result
+
+
 FIND_AUDITION_PAGE_PROMPT = """\
 You are helping find the auditions or employment page for an orchestra website.
 
@@ -381,6 +433,33 @@ def _norm_url(u: Optional[str]) -> Optional[str]:
     return u
 
 
+def _geocode_orchestra(orchestra: models.Orchestra, venue_address: Optional[str], website: Optional[str]):
+    """Try to set lat/lng on an orchestra using the best available address info."""
+    # 1. Venue address extracted from the audition page
+    if venue_address:
+        coords = _geocode(venue_address)
+        if coords:
+            orchestra.lat, orchestra.lng = coords
+            print(f"[geocode] {orchestra.name}: venue address → {coords}")
+            return
+    # 2. Physical address scraped from the contact/about page
+    if website:
+        contact_address = _find_address_on_site(website)
+        if contact_address:
+            coords = _geocode(contact_address)
+            if coords:
+                orchestra.lat, orchestra.lng = coords
+                print(f"[geocode] {orchestra.name}: contact page → {coords}")
+                return
+    # 3. City + state fallback (places pin at city centre)
+    if orchestra.city and orchestra.state:
+        query = f"{orchestra.city}, {orchestra.state}, US"
+        coords = _geocode(query)
+        if coords:
+            orchestra.lat, orchestra.lng = coords
+            print(f"[geocode] {orchestra.name}: city fallback → {coords}")
+
+
 def crawl_orchestra(orchestra: models.Orchestra):
     """Crawl a single orchestra and persist results."""
     db = SessionLocal()
@@ -392,6 +471,9 @@ def crawl_orchestra(orchestra: models.Orchestra):
         # Determine URL to fetch
         url = audition_page or website
         if not url:
+            if orchestra.lat is None or orchestra.lng is None:
+                _geocode_orchestra(orchestra, venue_address=None, website=None)
+                db.commit()
             return
 
         text = _fetch_page(url)
@@ -418,6 +500,9 @@ def crawl_orchestra(orchestra: models.Orchestra):
 
         if not text:
             orchestra.crawl_error = "Failed to fetch page or no content returned"
+            # Still attempt geocoding from city/state even if page fetch failed
+            if orchestra.lat is None or orchestra.lng is None:
+                _geocode_orchestra(orchestra, venue_address=None, website=website)
             db.commit()
             return
 
@@ -425,12 +510,7 @@ def crawl_orchestra(orchestra: models.Orchestra):
 
         # Geocode if we don't have coordinates yet
         if orchestra.lat is None or orchestra.lng is None:
-            venue_address = data.get("venue_address")
-            geocode_query = venue_address or f"{orchestra.city}, {orchestra.state}, US"
-            coords = _geocode(geocode_query)
-            if coords:
-                orchestra.lat, orchestra.lng = coords
-                print(f"[geocode] {orchestra.name}: {geocode_query!r} → {coords}")
+            _geocode_orchestra(orchestra, venue_address=data.get("venue_address"), website=website)
 
         # Mark all current auditions as inactive — we'll reactivate/create below
         db.query(models.Audition).filter(
