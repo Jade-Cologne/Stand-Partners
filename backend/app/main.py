@@ -16,6 +16,12 @@ async def lifespan(app: FastAPI):
     # Create tables if they don't exist
     models.Base.metadata.create_all(bind=engine)
 
+    # Add any new enum values that may not exist yet in the DB
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TYPE orchestratype ADD VALUE IF NOT EXISTS 'other'"))
+        conn.commit()
+
     # Ensure upload directory exists
     os.makedirs("uploads/excerpts", exist_ok=True)
 
