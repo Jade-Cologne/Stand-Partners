@@ -152,7 +152,7 @@ def reset_orchestras(x_admin_key: str = Header(...)):
     db = SessionLocal()
     try:
         deleted = db.query(models.Orchestra).filter(
-            models.Orchestra.source.notin_(["seed", "manual"])
+            models.Orchestra.source.notin_(["seed", "manual"]) | models.Orchestra.source.is_(None)
         ).delete(synchronize_session=False)
         db.commit()
         return {"status": "reset complete", "deleted": deleted}
