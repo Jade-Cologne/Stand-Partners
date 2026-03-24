@@ -11,13 +11,11 @@ from app.database import SessionLocal
 from app import models
 
 
-# Strip only the pure ensemble-type nouns that carry no identity on their own.
-# Qualifier words like "youth", "chamber", "pops", "civic", "metropolitan" etc.
-# are intentionally kept — they distinguish different ensembles in the same city.
 GENERIC_WORDS = {
-    "symphony", "orchestra", "philharmonic",
-    "music", "musical", "association", "society", "foundation",
-    "the", "of", "and", "a", "an",
+    "symphony", "orchestra", "philharmonic", "chamber", "ensemble",
+    "pops", "sinfonia", "sinfonietta", "youth", "civic", "municipal",
+    "metropolitan", "metro", "music", "musical", "association",
+    "society", "foundation", "the", "of", "and", "a", "an",
 }
 
 
@@ -111,23 +109,31 @@ def run_data_clean(dry_run: bool = True) -> dict:
 
         # --- Warnings: require manual review ---
 
-        # Near-duplicate names within the same state.
-        # Compare only the distinctive (non-generic) words, and only when both
-        # names have the same number of distinctive words — this prevents
-        # "Springfield Symphony" and "Columbus Symphony" from matching just
-        # because they share "symphony".
-        distinctive = [(o, _distinctive_words(o.name)) for o in orchestras]
-        for i, (o1, d1) in enumerate(distinctive):
-            for o2, d2 in distinctive[i + 1:]:
+        # Duplicate name detection:
+        # - Same word count: strip generic words from both, compare the remainder.
+        #   "Boston Symphony" vs "Bolton Symphony" → "Boston" vs "Bolton"
+        # - Different word count: compare full normalized names.
+        #   "Boston Symphony" vs "Boston Symphony Orchestra" → full comparison
+        prepped = [(o, _normalize_name(o.name), _distinctive_words(o.name)) for o in orchestras]
+        for i, (o1, n1, d1) in enumerate(prepped):
+            for o2, n2, d2 in prepped[i + 1:]:
                 if o1.state != o2.state:
                     continue
-                if not d1 or not d2 or len(d1) != len(d2):
-                    continue
-                ratio = difflib.SequenceMatcher(None, " ".join(d1), " ".join(d2)).ratio()
+                words1 = n1.split()
+                words2 = n2.split()
+                if len(words1) == len(words2):
+                    # Same word count: compare distinctive parts only
+                    if not d1 or not d2:
+                        continue
+                    a, b = " ".join(d1), " ".join(d2)
+                else:
+                    # Different word count: compare full names
+                    a, b = n1, n2
+                ratio = difflib.SequenceMatcher(None, a, b).ratio()
                 if ratio >= 0.85:
                     report["warnings"]["duplicate_names"].append({
                         "similarity": round(ratio, 2),
-                        "distinctive_words": {"o1": d1, "o2": d2},
+                        "compared": {"o1": a, "o2": b},
                         "orchestra_1": {"id": o1.id, "name": o1.name, "state": o1.state},
                         "orchestra_2": {"id": o2.id, "name": o2.name, "state": o2.state},
                     })
