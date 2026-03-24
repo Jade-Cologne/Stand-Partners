@@ -54,6 +54,15 @@ class StateRequest(BaseModel):
     state: str
 
 
+class OrchestraUpdate(BaseModel):
+    name: str | None = None
+    state: str | None = None
+    city: str | None = None
+    website: str | None = None
+    audition_page: str | None = None
+    crawl_enabled: bool | None = None
+
+
 @router.post("/stop")
 def stop_job(payload: StopRequest, x_admin_key: str = Header(...)):
     _require_key(x_admin_key)
@@ -71,6 +80,41 @@ def trigger_url_enrichment(x_admin_key: str = Header(...), sync: bool = False):
         return {"status": "url enrichment complete"}
     Thread(target=run_url_enrichment, daemon=True).start()
     return {"status": "url enrichment started"}
+
+
+@router.patch("/orchestras/{orchestra_id}")
+def update_orchestra(orchestra_id: int, payload: OrchestraUpdate, x_admin_key: str = Header(...)):
+    _require_key(x_admin_key)
+    from app.database import SessionLocal
+    from app import models
+    db = SessionLocal()
+    try:
+        o = db.query(models.Orchestra).filter(models.Orchestra.id == orchestra_id).first()
+        if not o:
+            raise HTTPException(status_code=404, detail="Orchestra not found")
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(o, field, value)
+        db.commit()
+        return {"status": "updated", "id": orchestra_id}
+    finally:
+        db.close()
+
+
+@router.delete("/orchestras/{orchestra_id}")
+def delete_orchestra(orchestra_id: int, x_admin_key: str = Header(...)):
+    _require_key(x_admin_key)
+    from app.database import SessionLocal
+    from app import models
+    db = SessionLocal()
+    try:
+        o = db.query(models.Orchestra).filter(models.Orchestra.id == orchestra_id).first()
+        if not o:
+            raise HTTPException(status_code=404, detail="Orchestra not found")
+        db.delete(o)
+        db.commit()
+        return {"status": "deleted", "id": orchestra_id}
+    finally:
+        db.close()
 
 
 @router.post("/clean")
