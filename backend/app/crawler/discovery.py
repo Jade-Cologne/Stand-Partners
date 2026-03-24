@@ -124,10 +124,8 @@ US_STATES = [
 
 CLAUDE_DISCOVERY_PROMPT = """\
 Return ONLY a valid JSON array, no other text, no markdown fences.
-List every orchestra, symphony, sinfonietta, chamber orchestra, pops orchestra,
-wind ensemble, concert band, wind symphony, opera company, ballet/dance company
-orchestra, and summer festival orchestra you know of in {state}, United States.
-Include professional, regional, community, and youth ensembles of all these types.
+List every orchestra and symphony you know of in {state}, United States.
+Include professional, regional, community, and youth orchestras.
 Each object must have exactly these fields:
   "name": full official name,
   "city": city name,
@@ -135,10 +133,10 @@ Each object must have exactly these fields:
   "country": "US",
   "website": homepage URL string or null,
   "type": one of professional | regional | community | youth
-Exclude university, college, conservatory, and student ensembles entirely.
-Only include ensembles open to the general public (professional auditions,
+Exclude university, college, conservatory, and student orchestras entirely.
+Only include orchestras open to the general public (professional auditions,
 community participation, or youth programs not tied to a school).
-Only include ensembles you are confident exist. Do not hallucinate.
+Only include orchestras you are confident exist. Do not hallucinate.
 Start your response with [ and end with ].
 """
 
@@ -146,7 +144,7 @@ Start your response with [ and end with ].
 def _discover_state_via_claude(state: str) -> list[dict]:
     message = _client().messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=8192,
+        max_tokens=4096,
         messages=[{
             "role": "user",
             "content": CLAUDE_DISCOVERY_PROMPT.format(state=state),
