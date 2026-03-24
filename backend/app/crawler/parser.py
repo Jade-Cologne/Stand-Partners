@@ -129,22 +129,55 @@ def _fetch_page(url: str) -> Optional[str]:
         return None
 
 
+FIND_AUDITION_PAGE_PROMPT = """\
+You are helping find the auditions or employment page for an orchestra website.
+
+Base URL: {website}
+
+Links found on the homepage:
+{links}
+
+Return ONLY the single most likely URL for the orchestra's auditions, employment, jobs, or careers page.
+Convert relative URLs to absolute using the base URL.
+If no such page exists, return null.
+Respond with only the URL or null — no other text.
+"""
+
+
 def _find_audition_page(website: str) -> Optional[str]:
-    """Try common paths for audition/employment pages."""
-    candidates = [
-        "/auditions", "/employment", "/careers", "/jobs",
-        "/about/auditions", "/about/employment", "/about/careers",
-        "/musicians/auditions", "/join-us",
-    ]
-    for path in candidates:
-        url = website.rstrip("/") + path
-        try:
-            resp = httpx.head(url, timeout=8, follow_redirects=True)
-            if resp.status_code == 200:
-                return url
-        except Exception:
-            continue
-    return None
+    """Fetch the homepage, extract links, and ask Claude to identify the auditions page."""
+    try:
+        headers = {"User-Agent": "stand.partners orchestral audition aggregator (contact@stand.partners)"}
+        resp = httpx.get(website, headers=headers, timeout=15, follow_redirects=True)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+        links = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            text = a.get_text(strip=True)
+            if href and text:
+                links.append(f"{text}: {href}")
+        if not links:
+            return None
+    except Exception as e:
+        print(f"[find-audition-page] Failed to fetch {website}: {e}")
+        return None
+
+    message = _client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": FIND_AUDITION_PAGE_PROMPT.format(
+                website=website,
+                links="\n".join(links[:200]),
+            ),
+        }],
+    )
+    result = message.content[0].text.strip()
+    if result.lower() == "null" or not result.startswith("http"):
+        return None
+    return result
 
 
 def _parse_page(url: str, text: str) -> dict:
@@ -331,6 +364,8 @@ def crawl_orchestra(orchestra: models.Orchestra):
                 text = _fetch_page(url)
 
         if not text:
+            orchestra.crawl_error = "Failed to fetch page or no content returned"
+            db.commit()
             return
 
         data = _parse_page(url, text)
@@ -357,12 +392,18 @@ def crawl_orchestra(orchestra: models.Orchestra):
             _upsert_sub_list(db, orchestra, data["sub_list"])
 
         orchestra.last_crawled_at = datetime.utcnow()
+        orchestra.crawl_error = None
         db.commit()
         print(f"[crawl] {orchestra.name}: {len(data.get('auditions', []))} audition(s)")
 
     except Exception as e:
         db.rollback()
         print(f"[crawl] Error crawling {orchestra.name}: {e}")
+        try:
+            orchestra.crawl_error = str(e)
+            db.commit()
+        except Exception:
+            db.rollback()
     finally:
         db.close()
 

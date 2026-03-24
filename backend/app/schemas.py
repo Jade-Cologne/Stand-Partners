@@ -94,6 +94,7 @@ class OrchestraBase(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     website: Optional[str] = None
+    audition_page: Optional[str] = None
     personnel_manager_name: Optional[str] = None
     personnel_manager_email: Optional[str] = None
 
@@ -101,6 +102,7 @@ class OrchestraOut(OrchestraBase):
     id: int
     added_at: datetime
     last_crawled_at: Optional[datetime] = None
+    crawl_error: Optional[str] = None
     active_audition_count: int = 0
     sub_list_info: Optional[SubListInfoOut] = None
 

@@ -299,6 +299,13 @@ def run_url_enrichment():
                 if o.id in id_to_url:
                     o.website = id_to_url[o.id]
                     updated += 1
+                    # Probe for a direct auditions/employment page
+                    if not o.audition_page:
+                        from app.crawler.parser import _find_audition_page
+                        found = _find_audition_page(o.website)
+                        if found:
+                            o.audition_page = found
+                            print(f"[enrich] {o.name}: found audition page {found}")
             db.commit()
             print(f"[enrich] Batch {i//batch_size + 1}: {len(id_to_url)} URLs found")
             time.sleep(1)

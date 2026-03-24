@@ -41,6 +41,7 @@ class Orchestra(Base):
     added_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_crawled_at = Column(DateTime, nullable=True)
     crawl_enabled = Column(Boolean, default=True, nullable=False)
+    crawl_error = Column(Text, nullable=True)  # last error message if crawl failed
     notes = Column(Text, nullable=True)
 
     auditions = relationship("Audition", back_populates="orchestra", cascade="all, delete-orphan")
