@@ -11,6 +11,15 @@ from app.database import SessionLocal
 from app import models
 
 
+# Words that appear in nearly every ensemble name and carry no distinguishing info
+GENERIC_WORDS = {
+    "symphony", "orchestra", "philharmonic", "chamber", "ensemble",
+    "pops", "sinfonia", "sinfonietta", "youth", "civic", "municipal",
+    "metropolitan", "metro", "music", "musical", "association",
+    "society", "foundation", "the", "of", "and", "a", "an",
+}
+
+
 def _normalize_name(name: str) -> str:
     """Normalize orchestra name for fuzzy comparison."""
     name = name.lower().strip()
@@ -18,6 +27,11 @@ def _normalize_name(name: str) -> str:
     name = re.sub(r"\s+(inc\.?|llc\.?|ltd\.?|corp\.?)$", "", name)
     name = re.sub(r"\s+", " ", name)
     return name
+
+
+def _distinctive_words(name: str) -> list[str]:
+    """Return only the non-generic words — the parts that actually identify an orchestra."""
+    return [w for w in _normalize_name(name).split() if w not in GENERIC_WORDS]
 
 
 def _fix_url(url: str) -> Optional[str]:
@@ -96,16 +110,23 @@ def run_data_clean(dry_run: bool = True) -> dict:
 
         # --- Warnings: require manual review ---
 
-        # Near-duplicate names within the same state
-        normalized = [(o, _normalize_name(o.name)) for o in orchestras]
-        for i, (o1, n1) in enumerate(normalized):
-            for o2, n2 in normalized[i + 1:]:
+        # Near-duplicate names within the same state.
+        # Compare only the distinctive (non-generic) words, and only when both
+        # names have the same number of distinctive words — this prevents
+        # "Springfield Symphony" and "Columbus Symphony" from matching just
+        # because they share "symphony".
+        distinctive = [(o, _distinctive_words(o.name)) for o in orchestras]
+        for i, (o1, d1) in enumerate(distinctive):
+            for o2, d2 in distinctive[i + 1:]:
                 if o1.state != o2.state:
                     continue
-                ratio = difflib.SequenceMatcher(None, n1, n2).ratio()
+                if not d1 or not d2 or len(d1) != len(d2):
+                    continue
+                ratio = difflib.SequenceMatcher(None, " ".join(d1), " ".join(d2)).ratio()
                 if ratio >= 0.85:
                     report["warnings"]["duplicate_names"].append({
                         "similarity": round(ratio, 2),
+                        "distinctive_words": {"o1": d1, "o2": d2},
                         "orchestra_1": {"id": o1.id, "name": o1.name, "state": o1.state},
                         "orchestra_2": {"id": o2.id, "name": o2.name, "state": o2.state},
                     })
