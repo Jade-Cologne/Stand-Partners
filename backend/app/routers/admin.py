@@ -149,13 +149,29 @@ def reset_orchestras(x_admin_key: str = Header(...)):
     _require_key(x_admin_key)
     from app.database import SessionLocal
     from app import models
+    from sqlalchemy import delete
     db = SessionLocal()
     try:
-        deleted = db.query(models.Orchestra).filter(
-            models.Orchestra.source.notin_(["seed", "manual"]) | models.Orchestra.source.is_(None)
-        ).delete(synchronize_session=False)
+        target_ids = [
+            row.id for row in db.query(models.Orchestra.id).filter(
+                models.Orchestra.source.notin_(["seed", "manual"]) | models.Orchestra.source.is_(None)
+            ).all()
+        ]
+        if not target_ids:
+            return {"status": "reset complete", "deleted": 0}
+        # Delete child records first to satisfy FK constraints
+        audition_ids = [
+            row.id for row in db.query(models.Audition.id).filter(
+                models.Audition.orchestra_id.in_(target_ids)
+            ).all()
+        ]
+        if audition_ids:
+            db.execute(delete(models.AuditionExcerpt).where(models.AuditionExcerpt.audition_id.in_(audition_ids)))
+        db.execute(delete(models.Audition).where(models.Audition.orchestra_id.in_(target_ids)))
+        db.execute(delete(models.SubListInfo).where(models.SubListInfo.orchestra_id.in_(target_ids)))
+        db.execute(delete(models.Orchestra).where(models.Orchestra.id.in_(target_ids)))
         db.commit()
-        return {"status": "reset complete", "deleted": deleted}
+        return {"status": "reset complete", "deleted": len(target_ids)}
     finally:
         db.close()
 
