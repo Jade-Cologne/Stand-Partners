@@ -60,7 +60,7 @@ function createIcon(color, hasAuditions) {
 
 const PIN_CSS = `
   .orch-pin { cursor: pointer; transition: transform 0.12s ease, filter 0.12s ease; }
-  .orch-pin:hover { transform: scale(1.45); filter: brightness(0.72); }
+  .orch-pin:hover, .orch-pin-active { transform: scale(1.45); filter: brightness(0.72); }
   .cluster-badge {
     width: 34px; height: 34px;
     background: rgba(255, 255, 255, 0.93);
@@ -76,7 +76,7 @@ const PIN_CSS = `
     cursor: pointer;
     transition: transform 0.12s ease, filter 0.12s ease;
   }
-  .cluster-badge:hover { transform: scale(1.35); filter: brightness(0.82); }
+  .cluster-badge:hover, .cluster-badge-active { transform: scale(1.35); filter: brightness(0.82); }
   @keyframes popup-in {
     from { opacity: 0; transform: translateY(5px) scale(0.96); }
     to   { opacity: 1; transform: translateY(0)   scale(1); }
@@ -89,25 +89,19 @@ const PIN_CSS = `
   .popup-closing { animation: popup-out 0.13s ease-in forwards; transform-origin: bottom center; pointer-events: none; }
 `;
 
-function PopupArrow() {
+function PopupArrow({ direction = "down" }) {
+  if (direction === "left") {
+    return (
+      <>
+        <div style={{ position: "absolute", left: -7, top: "50%", transform: "translateY(-50%)", width: 0, height: 0, borderTop: "7px solid transparent", borderBottom: "7px solid transparent", borderRight: "7px solid #4b5563" }} />
+        <div style={{ position: "absolute", left: -5, top: "50%", transform: "translateY(-50%)", width: 0, height: 0, borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderRight: "5px solid #1f2937" }} />
+      </>
+    );
+  }
   return (
     <>
-      <div style={{
-        position: "absolute", bottom: -7, left: "50%",
-        transform: "translateX(-50%)",
-        width: 0, height: 0,
-        borderLeft: "7px solid transparent",
-        borderRight: "7px solid transparent",
-        borderTop: "7px solid #4b5563",
-      }} />
-      <div style={{
-        position: "absolute", bottom: -5, left: "50%",
-        transform: "translateX(-50%)",
-        width: 0, height: 0,
-        borderLeft: "5px solid transparent",
-        borderRight: "5px solid transparent",
-        borderTop: "5px solid #1f2937",
-      }} />
+      <div style={{ position: "absolute", bottom: -7, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "7px solid transparent", borderRight: "7px solid transparent", borderTop: "7px solid #4b5563" }} />
+      <div style={{ position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "5px solid #1f2937" }} />
     </>
   );
 }
@@ -121,7 +115,7 @@ function PinIcon({ filled }) {
   );
 }
 
-function PinCard({ pin, onClose, onBack, navigate, isPinned, onTogglePin }) {
+function PinCard({ pin, onClose, onBack, navigate, isPinned, onTogglePin, arrowDirection = "down" }) {
   const hasAuditions = pin.active_audition_count > 0;
   return (
     <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-4 w-64 relative">
@@ -162,7 +156,7 @@ function PinCard({ pin, onClose, onBack, navigate, isPinned, onTogglePin }) {
           View orchestra →
         </button>
       </div>
-      <PopupArrow />
+      <PopupArrow direction={arrowDirection} />
     </div>
   );
 }
@@ -270,9 +264,8 @@ function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, 
   );
 }
 
-// Cluster list positioned near the cluster marker, with hover-popup to the right
-function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, pinnedPins, togglePin, navigate }) {
-  const pos = useLatLngPosition(latlng);
+// Cluster list — rendered OUTSIDE MapContainer (fixed position, centered) to avoid animation loops
+function ClusterListFixed({ pins, hoverTimer, closeAll, onSelectPin, pinnedPins, togglePin, navigate }) {
   const [hoveredPin, setHoveredPin] = useState(null);
   const hoverPinTimer = useRef(null);
 
@@ -287,23 +280,27 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
 
   return (
     <div
-      className="absolute z-[1000] pointer-events-auto"
-      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))" }}
+      className="fixed z-[2000] pointer-events-auto popup-open"
+      style={{ top: "40%", left: `calc(50% - ${PANEL_WIDTH / 2}px)`, transform: "translate(-50%, -50%)" }}
       onMouseEnter={() => clearTimeout(hoverTimer.current)}
       onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
     >
-      <div className="flex items-start gap-2">
-        <ClusterListPanel
-          pins={pins}
-          onHoverPin={handlePinHover}
-          onSelectPin={onSelectPin}
-          onClose={closeAll}
-          pinnedPins={pinnedPins}
-          togglePin={togglePin}
-        />
+      <div className="relative flex items-start">
+        <div className="relative">
+          <ClusterListPanel
+            pins={pins}
+            onHoverPin={handlePinHover}
+            onSelectPin={onSelectPin}
+            onClose={closeAll}
+            pinnedPins={pinnedPins}
+            togglePin={togglePin}
+          />
+          <PopupArrow direction="down" />
+        </div>
         {hoveredPin && (
           <div
-            className="popup-open"
+            className="absolute top-0 popup-open"
+            style={{ left: "calc(100% + 8px)" }}
             onMouseEnter={() => clearTimeout(hoverPinTimer.current)}
             onMouseLeave={() => { hoverPinTimer.current = setTimeout(() => setHoveredPin(null), HOVER_CLOSE_MS); }}
           >
@@ -313,6 +310,7 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
               navigate={navigate}
               isPinned={pinnedPins.has(hoveredPin.id)}
               onTogglePin={() => togglePin(hoveredPin.id)}
+              arrowDirection="left"
             />
           </div>
         )}
@@ -642,7 +640,6 @@ export default function Home() {
     openingsOnly: false,
   });
   const [clusterPins, setClusterPins] = useState(null);
-  const [clusterLatLng, setClusterLatLng] = useState(null);
   const [detailPin, setDetailPin] = useState(null);
   const [closingPin, setClosingPin] = useState(null);
   const [pinnedPins, setPinnedPins] = useState(new Set());
@@ -656,7 +653,25 @@ export default function Home() {
   const [infoExpanded, setInfoExpanded] = useState(false);
   const hoverTimer = useRef(null);
   const closingTimer = useRef(null);
+  const activePinEl = useRef(null);
+  const activeClusterEl = useRef(null);
   const navigate = useNavigate();
+
+  const setActivePinDom = (el) => {
+    if (activePinEl.current && activePinEl.current !== el) {
+      activePinEl.current.classList.remove("orch-pin-active");
+    }
+    activePinEl.current = el || null;
+    if (el) el.classList.add("orch-pin-active");
+  };
+
+  const setActiveClusterDom = (el) => {
+    if (activeClusterEl.current && activeClusterEl.current !== el) {
+      activeClusterEl.current.classList.remove("cluster-badge-active");
+    }
+    activeClusterEl.current = el || null;
+    if (el) el.classList.add("cluster-badge-active");
+  };
 
   useEffect(() => {
     api.orchestras.mapPins().then(setPins).finally(() => setLoading(false));
@@ -694,14 +709,16 @@ export default function Home() {
 
   const closeAll = () => {
     startClosingPin(detailPin);
+    setActivePinDom(null);
+    setActiveClusterDom(null);
     setClusterPins(null);
-    setClusterLatLng(null);
     setDetailPin(null);
   };
 
   const showCluster = (e) => {
     clearTimeout(hoverTimer.current);
-    setClusterLatLng(e.layer.getLatLng());
+    setActiveClusterDom(e.layer.getElement()?.querySelector(".cluster-badge"));
+    setActivePinDom(null);
     const found = e.layer.getAllChildMarkers()
       .map((m) => pinByLatLng[`${m._latlng.lat},${m._latlng.lng}`])
       .filter(Boolean)
@@ -749,8 +766,9 @@ export default function Home() {
           zoomDelta={0.5}
         >
           <TileLayer
-            attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+            subdomains={["a", "b", "c"]}
           />
           <UserLocationLayer userLocation={userLocation} radiusMiles={radiusMiles} />
           <CenterOnUserButton userLocation={userLocation} />
@@ -778,19 +796,19 @@ export default function Home() {
                 position={[pin.lat, pin.lng]}
                 icon={createIcon(TYPE_COLORS[normalizeType(pin.type)], pin.active_audition_count > 0)}
                 eventHandlers={{
-                  mouseover: () => {
+                  mouseover: (e) => {
                     clearTimeout(hoverTimer.current);
+                    setActivePinDom(e.target.getElement()?.querySelector(".orch-pin"));
+                    setActiveClusterDom(null);
                     startClosingPin(detailPin?.id !== pin.id ? detailPin : null);
                     setDetailPin(pin);
                     setClusterPins(null);
-                    setClusterLatLng(null);
                   },
                   mouseout: () => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); },
                   click: () => {
                     clearTimeout(hoverTimer.current);
                     setDetailPin(pin);
                     setClusterPins(null);
-                    setClusterLatLng(null);
                     setSidebarPin(pin);
                     setSidebarView("detail");
                   },
@@ -847,19 +865,6 @@ export default function Home() {
             <PinnedPopupOverlay key={`popup-${pin.id}`} pin={pin} navigate={navigate} togglePin={togglePin} />
           ))}
 
-          {/* Cluster list near the cluster */}
-          {clusterPins && !detailPin && clusterLatLng && (
-            <ClusterListOverlay
-              pins={clusterPins}
-              latlng={clusterLatLng}
-              hoverTimer={hoverTimer}
-              closeAll={closeAll}
-              onSelectPin={(pin) => { closeAll(); setSidebarPin(pin); setSidebarView("detail"); }}
-              pinnedPins={pinnedPins}
-              togglePin={togglePin}
-              navigate={navigate}
-            />
-          )}
         </MapContainer>
       </div>
 
@@ -885,6 +890,19 @@ export default function Home() {
         togglePin={togglePin}
         navigate={navigate}
       />
+
+      {/* Cluster list — fixed position, outside overflow:hidden map frame */}
+      {clusterPins && !detailPin && (
+        <ClusterListFixed
+          pins={clusterPins}
+          hoverTimer={hoverTimer}
+          closeAll={closeAll}
+          onSelectPin={(pin) => { closeAll(); setSidebarPin(pin); setSidebarView("detail"); }}
+          pinnedPins={pinnedPins}
+          togglePin={togglePin}
+          navigate={navigate}
+        />
+      )}
     </div>
   );
 }
