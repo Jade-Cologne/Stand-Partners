@@ -60,6 +60,39 @@ async def lifespan(app: FastAPI):
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_orchestras_type ON orchestras(type)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_auditions_orchestra_active ON auditions(orchestra_id, active)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_auditions_archived ON auditions(archived_at)"))
+
+        # Remove exact-duplicate orchestras (keep lowest id per case-insensitive name),
+        # then enforce uniqueness at the DB level so it can never happen again.
+        conn.execute(text("""
+            DELETE FROM audition_excerpts WHERE audition_id IN (
+                SELECT a.id FROM auditions a
+                WHERE a.orchestra_id IN (
+                    SELECT id FROM orchestras
+                    WHERE id NOT IN (SELECT MIN(id) FROM orchestras GROUP BY lower(name))
+                )
+            )
+        """))
+        conn.execute(text("""
+            DELETE FROM auditions WHERE orchestra_id IN (
+                SELECT id FROM orchestras
+                WHERE id NOT IN (SELECT MIN(id) FROM orchestras GROUP BY lower(name))
+            )
+        """))
+        conn.execute(text("""
+            DELETE FROM sub_list_info WHERE orchestra_id IN (
+                SELECT id FROM orchestras
+                WHERE id NOT IN (SELECT MIN(id) FROM orchestras GROUP BY lower(name))
+            )
+        """))
+        conn.execute(text("""
+            DELETE FROM orchestras
+            WHERE id NOT IN (SELECT MIN(id) FROM orchestras GROUP BY lower(name))
+        """))
+        conn.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_orchestras_lower_name
+            ON orchestras(lower(name))
+        """))
+
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS job_runs (
                 id SERIAL PRIMARY KEY,

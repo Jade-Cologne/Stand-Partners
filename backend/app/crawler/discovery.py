@@ -211,6 +211,7 @@ def _archive_discovery(db, o: dict, source: str, reason: str):
 
 
 def _save_orchestras(orchestras: list[dict], existing_names: set, db, source: str = "claude") -> int:
+    from sqlalchemy.exc import IntegrityError
     added = 0
     for o in orchestras:
         name = o.get("name", "").strip()
@@ -232,18 +233,23 @@ def _save_orchestras(orchestras: list[dict], existing_names: set, db, source: st
             orch_type = models.OrchestraType(raw_type)
         except ValueError:
             orch_type = models.OrchestraType.other
-        db.add(models.Orchestra(
-            name=name,
-            type=orch_type,
-            city=o.get("city", ""),
-            state=o.get("state"),
-            country=o.get("country", "US"),
-            website=website,
-            crawl_enabled=True,
-            source=source,
-        ))
-        existing_names.add(name.lower())
-        added += 1
+        try:
+            db.add(models.Orchestra(
+                name=name,
+                type=orch_type,
+                city=o.get("city", ""),
+                state=o.get("state"),
+                country=o.get("country", "US"),
+                website=website,
+                crawl_enabled=True,
+                source=source,
+            ))
+            db.flush()
+            existing_names.add(name.lower())
+            added += 1
+        except IntegrityError:
+            db.rollback()
+            _archive_discovery(db, o, source, f"duplicate rejected by DB constraint: {name}")
     return added
 
 
