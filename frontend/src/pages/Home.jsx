@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Circle, CircleMarker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -333,6 +333,7 @@ function UserLocationLayer({ userLocation, radiusMiles }) {
     if (!map.getPane("userLocationPane")) {
       const pane = map.createPane("userLocationPane");
       pane.style.zIndex = "650";
+      pane.style.pointerEvents = "none";
     }
   }, [map]);
 
@@ -356,24 +357,26 @@ function UserLocationLayer({ userLocation, radiusMiles }) {
   );
 }
 
-function MapControls({ userLocation }) {
+function MapControls({ userLocation, onRequestLocation }) {
   const map = useMap();
-  const btnClass = "w-8 h-8 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors";
+  const btnClass = "w-10 h-10 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors";
   return (
     <div className="absolute top-3 right-3 z-[999] pointer-events-auto flex flex-col gap-1">
-      <button className={`${btnClass} text-lg font-light leading-none`} onClick={() => map.zoomIn()} title="Zoom in">+</button>
-      <button className={`${btnClass} text-xl font-light leading-none`} onClick={() => map.zoomOut()} title="Zoom out">−</button>
-      {userLocation && (
-        <button className={btnClass} onClick={() => map.flyTo([userLocation.lat, userLocation.lng], 9)} title="Center on my location">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <line x1="12" y1="2" x2="12" y2="6"/>
-            <line x1="12" y1="18" x2="12" y2="22"/>
-            <line x1="2" y1="12" x2="6" y2="12"/>
-            <line x1="18" y1="12" x2="22" y2="12"/>
-          </svg>
-        </button>
-      )}
+      <button className={`${btnClass} text-xl font-light leading-none`} onClick={() => map.zoomIn()} title="Zoom in">+</button>
+      <button className={`${btnClass} text-2xl font-light leading-none`} onClick={() => map.zoomOut()} title="Zoom out">−</button>
+      <button
+        className={btnClass}
+        onClick={() => userLocation ? map.flyTo([userLocation.lat, userLocation.lng], 9) : onRequestLocation()}
+        title={userLocation ? "Center on my location" : "Find my location"}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <line x1="12" y1="2" x2="12" y2="6"/>
+          <line x1="12" y1="18" x2="12" y2="22"/>
+          <line x1="2" y1="12" x2="6" y2="12"/>
+          <line x1="18" y1="12" x2="22" y2="12"/>
+        </svg>
+      </button>
     </div>
   );
 }
@@ -640,6 +643,37 @@ function OrchestraSidebar({
   );
 }
 
+// Memoized cluster+marker subtree — only re-renders when pin data changes,
+// never during hover/detail state changes. This prevents MarkerClusterGroup
+// from calling refreshClusters() mid-hover, which resets the icon DOM and
+// loops the expand animation.
+const MarkerLayer = memo(function MarkerLayer({
+  unpinnedVisible, clusterEventHandlers, clusterIconCreate, onMouseover, onMouseout, onClick,
+}) {
+  return (
+    <MarkerClusterGroup
+      chunkedLoading
+      maxClusterRadius={40}
+      zoomToBoundsOnClick={false}
+      eventHandlers={clusterEventHandlers}
+      iconCreateFunction={clusterIconCreate}
+    >
+      {unpinnedVisible.map((pin) => (
+        <Marker
+          key={pin.id}
+          position={[pin.lat, pin.lng]}
+          icon={createIcon(TYPE_COLORS[normalizeType(pin.type)], pin.active_audition_count > 0)}
+          eventHandlers={{
+            mouseover: (e) => onMouseover(e, pin),
+            mouseout: onMouseout,
+            click: () => onClick(pin),
+          }}
+        />
+      ))}
+    </MarkerClusterGroup>
+  );
+});
+
 export default function Home() {
   const [pins, setPins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -666,6 +700,8 @@ export default function Home() {
   const activeClusterEl = useRef(null);
   const closeAllRef = useRef(null);
   const pinByLatLngRef = useRef({});
+  const detailPinRef = useRef(null);
+  const pinnedPinsRef = useRef(new Set());
   const navigate = useNavigate();
 
   // Stable DOM helpers — refs only, no deps
@@ -683,6 +719,50 @@ export default function Home() {
     }
     activeClusterEl.current = el || null;
     if (el) el.classList.add("cluster-badge-active");
+  }, []);
+
+  // Keep mutable state accessible in stable callbacks without making them deps
+  detailPinRef.current = detailPin;
+  pinnedPinsRef.current = pinnedPins;
+
+  // Stable marker event callbacks — empty deps, use refs for mutable state.
+  // Passed to MarkerLayer (memo'd) so it never re-renders during hover interactions.
+  const onMarkerMouseover = useCallback((e, pin) => {
+    clearTimeout(hoverTimer.current);
+    setActivePinDom(e.target.getElement()?.querySelector(".orch-pin"));
+    setActiveClusterDom(null);
+    const prev = detailPinRef.current;
+    if (prev && prev.id !== pin.id && !pinnedPinsRef.current.has(prev.id)) {
+      clearTimeout(closingTimer.current);
+      setClosingPin(prev);
+      closingTimer.current = setTimeout(() => setClosingPin(null), CLOSE_ANIM_MS);
+    }
+    setDetailPin(pin);
+    setClusterPins(null);
+    setClusterLatLng(null);
+  }, [setActivePinDom, setActiveClusterDom]);
+
+  const onMarkerMouseout = useCallback(() => {
+    hoverTimer.current = setTimeout(() => closeAllRef.current?.(), HOVER_CLOSE_MS);
+  }, []);
+
+  const onMarkerClick = useCallback((pin) => {
+    clearTimeout(hoverTimer.current);
+    setDetailPin(pin);
+    setClusterPins(null);
+    setClusterLatLng(null);
+    setSidebarPin(pin);
+    setSidebarView("detail");
+  }, []);
+
+  const requestLocation = useCallback(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setSort("nearest");
+      },
+      () => {}
+    );
   }, []);
 
   useEffect(() => {
@@ -810,40 +890,15 @@ export default function Home() {
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
           <UserLocationLayer userLocation={userLocation} radiusMiles={radiusMiles} />
-          <MapControls userLocation={userLocation} />
-          <MarkerClusterGroup
-            chunkedLoading
-            maxClusterRadius={40}
-            zoomToBoundsOnClick={false}
-            eventHandlers={clusterEventHandlers}
-            iconCreateFunction={clusterIconCreate}
-          >
-            {unpinnedVisible.map((pin) => (
-              <Marker
-                key={pin.id}
-                position={[pin.lat, pin.lng]}
-                icon={createIcon(TYPE_COLORS[normalizeType(pin.type)], pin.active_audition_count > 0)}
-                eventHandlers={{
-                  mouseover: (e) => {
-                    clearTimeout(hoverTimer.current);
-                    setActivePinDom(e.target.getElement()?.querySelector(".orch-pin"));
-                    setActiveClusterDom(null);
-                    startClosingPin(detailPin?.id !== pin.id ? detailPin : null);
-                    setDetailPin(pin);
-                    setClusterPins(null);
-                  },
-                  mouseout: () => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); },
-                  click: () => {
-                    clearTimeout(hoverTimer.current);
-                    setDetailPin(pin);
-                    setClusterPins(null);
-                    setSidebarPin(pin);
-                    setSidebarView("detail");
-                  },
-                }}
-              />
-            ))}
-          </MarkerClusterGroup>
+          <MapControls userLocation={userLocation} onRequestLocation={requestLocation} />
+          <MarkerLayer
+            unpinnedVisible={unpinnedVisible}
+            clusterEventHandlers={clusterEventHandlers}
+            clusterIconCreate={clusterIconCreate}
+            onMouseover={onMarkerMouseover}
+            onMouseout={onMarkerMouseout}
+            onClick={onMarkerClick}
+          />
 
           {/* Pinned markers — always visible, never clustered */}
           {pinnedVisible.map((pin) => (
