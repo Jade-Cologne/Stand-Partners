@@ -233,7 +233,7 @@ function PinnedPopupOverlay({ pin, navigate, togglePin }) {
 // Cluster list panel (visual only — no map hooks)
 function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, togglePin }) {
   return (
-    <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl w-72 max-h-72 flex flex-col">
+    <div data-cluster-panel className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl w-72 max-h-72 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <p className="font-semibold text-gray-200 text-sm">{pins.length} orchestras</p>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none">×</button>
@@ -243,7 +243,13 @@ function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, 
           <div
             key={pin.id}
             className="flex items-center px-4 py-2.5 hover:bg-gray-700 border-b border-gray-700/60 last:border-0 transition-colors cursor-pointer"
-            onMouseEnter={() => onHoverPin(pin)}
+            onMouseEnter={(e) => {
+              const panelEl = e.currentTarget.closest("[data-cluster-panel]");
+              const yOffset = panelEl
+                ? e.currentTarget.getBoundingClientRect().top - panelEl.getBoundingClientRect().top
+                : 0;
+              onHoverPin(pin, yOffset);
+            }}
             onMouseLeave={() => onHoverPin(null)}
             onClick={() => onSelectPin(pin)}
           >
@@ -274,22 +280,28 @@ function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, 
 // Cluster list — positioned above the cluster marker using map coordinates
 function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, pinnedPins, togglePin, navigate }) {
   const pos = useLatLngPosition(latlng);
-  const [hoveredPin, setHoveredPin] = useState(null);
+  // Delay animation class by one frame so the browser computes the element's
+  // height before popup-open's calc(-100%) offset is applied, preventing the
+  // brief mis-position at the cluster point on first render.
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setReady(true); }, []);
+
+  const [hoveredEntry, setHoveredEntry] = useState(null); // { pin, yOffset }
   const hoverPinTimer = useRef(null);
 
-  const handlePinHover = (pin) => {
+  const handlePinHover = (pin, yOffset = 0) => {
     clearTimeout(hoverPinTimer.current);
     if (pin) {
-      setHoveredPin(pin);
+      setHoveredEntry({ pin, yOffset });
     } else {
-      hoverPinTimer.current = setTimeout(() => setHoveredPin(null), HOVER_CLOSE_MS);
+      hoverPinTimer.current = setTimeout(() => setHoveredEntry(null), HOVER_CLOSE_MS);
     }
   };
 
   return (
     <div
-      className="absolute z-[1000] pointer-events-auto popup-open"
-      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))" }}
+      className={`absolute z-[1000] pointer-events-auto${ready ? " popup-open" : ""}`}
+      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))", visibility: ready ? "visible" : "hidden" }}
       onMouseEnter={() => clearTimeout(hoverTimer.current)}
       onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
     >
@@ -305,19 +317,19 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
           />
           <PopupArrow direction="down" />
         </div>
-        {hoveredPin && (
+        {hoveredEntry && (
           <div
-            className="absolute top-0 popup-open"
-            style={{ left: "calc(100% + 8px)" }}
+            className="absolute popup-open"
+            style={{ left: "calc(100% + 8px)", top: hoveredEntry.yOffset }}
             onMouseEnter={() => clearTimeout(hoverPinTimer.current)}
-            onMouseLeave={() => { hoverPinTimer.current = setTimeout(() => setHoveredPin(null), HOVER_CLOSE_MS); }}
+            onMouseLeave={() => { hoverPinTimer.current = setTimeout(() => setHoveredEntry(null), HOVER_CLOSE_MS); }}
           >
             <PinCard
-              pin={hoveredPin}
-              onClose={() => setHoveredPin(null)}
+              pin={hoveredEntry.pin}
+              onClose={() => setHoveredEntry(null)}
               navigate={navigate}
-              isPinned={pinnedPins.has(hoveredPin.id)}
-              onTogglePin={() => togglePin(hoveredPin.id)}
+              isPinned={pinnedPins.has(hoveredEntry.pin.id)}
+              onTogglePin={() => togglePin(hoveredEntry.pin.id)}
               arrowDirection="left"
             />
           </div>
