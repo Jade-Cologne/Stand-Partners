@@ -232,13 +232,22 @@ function PinnedPopupOverlay({ pin, navigate, togglePin }) {
 
 // Cluster list panel (visual only — no map hooks)
 function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, togglePin }) {
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const stop = (e) => e.stopPropagation();
+    el.addEventListener("wheel", stop, { passive: true });
+    return () => el.removeEventListener("wheel", stop);
+  }, []);
+
   return (
     <div data-cluster-panel className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl w-72 max-h-72 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <p className="font-semibold text-gray-200 text-sm">{pins.length} orchestras</p>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none">×</button>
       </div>
-      <div className="overflow-y-auto flex-1">
+      <div ref={scrollRef} className="overflow-y-auto flex-1">
         {pins.map((pin) => (
           <div
             key={pin.id}
@@ -387,11 +396,9 @@ function MapControls({ userLocation, onRequestLocation }) {
         title={userLocation ? "Center on my location" : "Find my location"}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <line x1="12" y1="2" x2="12" y2="6"/>
-          <line x1="12" y1="18" x2="12" y2="22"/>
-          <line x1="2" y1="12" x2="6" y2="12"/>
-          <line x1="18" y1="12" x2="22" y2="12"/>
+          <circle cx="12" cy="12" r="10"/>
+          <circle cx="12" cy="12" r="6"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </svg>
       </button>
     </div>
@@ -522,6 +529,8 @@ function OrchestraSidebar({
   navigate,
 }) {
   const geoRequested = useRef(false);
+  const listScrollRef = useRef(null);
+  useEffect(() => { listScrollRef.current?.scrollTo({ top: 0 }); }, [page]);
 
   useEffect(() => {
     if (sort === "nearest" && !userLocation && !geoRequested.current) {
@@ -645,7 +654,7 @@ function OrchestraSidebar({
         </select>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div ref={listScrollRef} className="flex-1 overflow-y-auto min-h-0">
         {pagePins.map((pin) => (
           <button
             key={pin.id}
@@ -727,7 +736,7 @@ export default function Home() {
   const [perPage, setPerPage] = useState(25);
   const [sidebarView, setSidebarView] = useState("list");
   const [sidebarPin, setSidebarPin] = useState(null);
-  const [infoExpanded, setInfoExpanded] = useState(false);
+  const [infoExpanded, setInfoExpanded] = useState(true);
   const hoverTimer = useRef(null);
   const closingTimer = useRef(null);
   const activePinEl = useRef(null);
