@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import { api } from "../api";
@@ -129,6 +129,27 @@ function ClusterList({ pins, onSelect, onClose }) {
   );
 }
 
+function PinPopupOverlay({ pin, hoverTimer, closeAll, hasBack, onBack, navigate }) {
+  const map = useMap();
+  const toPos = () => {
+    const p = map.latLngToContainerPoint([pin.lat, pin.lng]);
+    return { x: p.x, y: p.y };
+  };
+  const [pos, setPos] = useState(toPos);
+  useMapEvents({ move: () => setPos(toPos()), zoom: () => setPos(toPos()) });
+
+  return (
+    <div
+      className="absolute z-[1000] pointer-events-auto"
+      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 14px))" }}
+      onMouseEnter={() => clearTimeout(hoverTimer.current)}
+      onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, 1000); }}
+    >
+      <PinCard pin={pin} onClose={closeAll} onBack={hasBack ? onBack : null} navigate={navigate} />
+    </div>
+  );
+}
+
 function MapControls({ filters, setFilters, totalPins }) {
   return (
     <div className="absolute top-4 right-4 z-[1000] bg-slate-900/92 backdrop-blur-sm rounded-xl shadow-xl p-4 w-56 border border-slate-700/60">
@@ -210,7 +231,8 @@ export default function Home() {
     return m;
   }, [visible]);
 
-  const handleClusterClick = (e) => {
+  const showCluster = (e) => {
+    clearTimeout(hoverTimer.current);
     const found = e.layer.getAllChildMarkers()
       .map(m => pinByLatLng[`${m._latlng.lat},${m._latlng.lng}`])
       .filter(Boolean)
@@ -248,7 +270,11 @@ export default function Home() {
           chunkedLoading
           maxClusterRadius={40}
           zoomToBoundsOnClick={false}
-          eventHandlers={{ clusterclick: handleClusterClick }}
+          eventHandlers={{
+            clusterclick: showCluster,
+            clustermouseover: showCluster,
+            clustermouseout: () => { hoverTimer.current = setTimeout(closeAll, 1000); },
+          }}
           iconCreateFunction={(cluster) =>
             L.divIcon({
               html: `<div class="cluster-badge">${cluster.getChildCount()}</div>`,
@@ -270,15 +296,15 @@ export default function Home() {
                   mouseover: (e) => {
                     clearTimeout(hoverTimer.current);
                     const { x, y } = e.containerPoint;
-                    setDetailPin({ pin, x, y });
+                    setDetailPin(pin);
                     setClusterPins(null);
                   },
                   mouseout: () => {
-                    hoverTimer.current = setTimeout(closeAll, 2000);
+                    hoverTimer.current = setTimeout(closeAll, 1000);
                   },
                   click: (e) => {
                     clearTimeout(hoverTimer.current);
-                    setDetailPin({ pin, x: e.containerPoint.x, y: e.containerPoint.y });
+                    setDetailPin(pin);
                     setClusterPins(null);
                   },
                 }}
@@ -286,30 +312,25 @@ export default function Home() {
             );
           })}
         </MarkerClusterGroup>
+        {detailPin && (
+          <PinPopupOverlay
+            pin={detailPin}
+            hoverTimer={hoverTimer}
+            closeAll={closeAll}
+            hasBack={!!clusterPins}
+            onBack={() => setDetailPin(null)}
+            navigate={navigate}
+          />
+        )}
       </MapContainer>
       <MapControls filters={filters} setFilters={setFilters} totalPins={visible.length} />
       {clusterPins && !detailPin && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]">
-          <ClusterList pins={clusterPins} onSelect={(p) => setDetailPin({ pin: p, x: null, y: null })} onClose={closeAll} />
-        </div>
-      )}
-      {detailPin && (
         <div
-          className="absolute z-[1000] pointer-events-auto"
-          style={
-            detailPin.x !== null
-              ? { left: detailPin.x, top: detailPin.y, transform: "translate(-50%, calc(-100% - 14px))" }
-              : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
-          }
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]"
           onMouseEnter={() => clearTimeout(hoverTimer.current)}
-          onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, 2000); }}
+          onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, 1000); }}
         >
-          <PinCard
-            pin={detailPin.pin}
-            onClose={closeAll}
-            onBack={clusterPins ? () => setDetailPin(null) : null}
-            navigate={navigate}
-          />
+          <ClusterList pins={clusterPins} onSelect={(p) => setDetailPin(p)} onClose={closeAll} />
         </div>
       )}
     </div>
