@@ -300,11 +300,12 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
 
   return (
     <div
-      className={`absolute z-[1000] pointer-events-auto${ready ? " popup-open" : ""}`}
+      className="absolute z-[1000] pointer-events-auto"
       style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))", visibility: ready ? "visible" : "hidden" }}
       onMouseEnter={() => clearTimeout(hoverTimer.current)}
       onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
     >
+      <div className={ready ? "popup-open" : ""}>
       <div className="relative flex items-start">
         <div className="relative">
           <ClusterListPanel
@@ -334,6 +335,7 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
             />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

@@ -19,6 +19,12 @@ body {
 }
 
 /* Voyager: darken + modest hue-rotate to give land a dull olive-green tone */
-.leaflet-tile-pane {
-  filter: brightness(0.70) saturate(0.55) hue-rotate(42deg) contrast(0.90);
+/* .leaflet-tile-pane { */
+  /* filter: brightness(0.70) saturate(0.55) hue-rotate(42deg) contrast(0.90); */
+/* } */
+
+/* User location pane — SVG children must not block pointer events on markers */
+.leaflet-userLocation-pane,
+.leaflet-userLocation-pane * {
+  pointer-events: none !important;
 }
