@@ -20,5 +20,5 @@ body {
 
 /* Tone down the Voyager tiles slightly to blend with the dark UI */
 .leaflet-tile-pane {
-  filter: brightness(0.82) saturate(0.85) contrast(0.92);
+  filter: brightness(0.76) saturate(0.80) contrast(0.90);
 }
