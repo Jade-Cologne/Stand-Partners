@@ -245,8 +245,9 @@ function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, 
             className="flex items-center px-4 py-2.5 hover:bg-gray-700 border-b border-gray-700/60 last:border-0 transition-colors cursor-pointer"
             onMouseEnter={(e) => {
               const panelEl = e.currentTarget.closest("[data-cluster-panel]");
+              const entryRect = e.currentTarget.getBoundingClientRect();
               const yOffset = panelEl
-                ? e.currentTarget.getBoundingClientRect().top - panelEl.getBoundingClientRect().top
+                ? entryRect.top - panelEl.getBoundingClientRect().top + entryRect.height / 2
                 : 0;
               onHoverPin(pin, yOffset);
             }}
@@ -301,7 +302,7 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
   return (
     <div
       className="absolute z-[1000] pointer-events-auto"
-      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))", visibility: ready ? "visible" : "hidden" }}
+      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 20px))", visibility: ready ? "visible" : "hidden" }}
       onMouseEnter={() => clearTimeout(hoverTimer.current)}
       onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
     >
@@ -320,19 +321,21 @@ function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, p
         </div>
         {hoveredEntry && (
           <div
-            className="absolute popup-open"
-            style={{ left: "calc(100% + 8px)", top: hoveredEntry.yOffset }}
+            className="absolute"
+            style={{ left: "calc(100% + 8px)", top: hoveredEntry.yOffset, transform: "translateY(-50%)" }}
             onMouseEnter={() => clearTimeout(hoverPinTimer.current)}
             onMouseLeave={() => { hoverPinTimer.current = setTimeout(() => setHoveredEntry(null), HOVER_CLOSE_MS); }}
           >
-            <PinCard
-              pin={hoveredEntry.pin}
-              onClose={() => setHoveredEntry(null)}
-              navigate={navigate}
-              isPinned={pinnedPins.has(hoveredEntry.pin.id)}
-              onTogglePin={() => togglePin(hoveredEntry.pin.id)}
-              arrowDirection="left"
-            />
+            <div className="popup-open">
+              <PinCard
+                pin={hoveredEntry.pin}
+                onClose={() => setHoveredEntry(null)}
+                navigate={navigate}
+                isPinned={pinnedPins.has(hoveredEntry.pin.id)}
+                onTogglePin={() => togglePin(hoveredEntry.pin.id)}
+                arrowDirection="left"
+              />
+            </div>
           </div>
         )}
       </div>

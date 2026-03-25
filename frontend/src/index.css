@@ -28,3 +28,18 @@ body {
 .leaflet-userLocation-pane * {
   pointer-events: none !important;
 }
+
+/* Themed scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
