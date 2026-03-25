@@ -41,7 +41,13 @@ const HOVER_CLOSE_MS = 150;
 const CLOSE_ANIM_MS = 130;
 const PANEL_WIDTH = 300;
 
+// Module-level cache — same L.divIcon instance for same color+hasAuditions.
+// Prevents react-leaflet from calling setIcon() on every re-render, which would
+// trigger MarkerClusterGroup to refreshClusters() and loop the expand animation.
+const _iconCache = {};
 function createIcon(color, hasAuditions) {
+  const key = `${color}:${hasAuditions}`;
+  if (_iconCache[key]) return _iconCache[key];
   const svg = hasAuditions
     ? `<svg width="${SVG_SIZE}" height="${SVG_SIZE}" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
          <polygon points="11,1 21,11 11,21 1,11" fill="${color}" stroke="white" stroke-width="1.5"/>
@@ -49,13 +55,14 @@ function createIcon(color, hasAuditions) {
     : `<svg width="${SVG_SIZE}" height="${SVG_SIZE}" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
          <circle cx="11" cy="11" r="8" fill="${color}" fill-opacity="0.65" stroke="white" stroke-width="1.5"/>
        </svg>`;
-  return L.divIcon({
+  _iconCache[key] = L.divIcon({
     html: `<div class="orch-pin" style="padding:${PAD}px;">${svg}</div>`,
     className: "",
     iconSize: [ICON_SIZE, ICON_SIZE],
     iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2],
     popupAnchor: [0, -(ICON_SIZE / 2)],
   });
+  return _iconCache[key];
 }
 
 const PIN_CSS = `
@@ -337,7 +344,7 @@ function UserLocationLayer({ userLocation, radiusMiles }) {
         center={[userLocation.lat, userLocation.lng]}
         radius={radiusMeters}
         pane="userLocationPane"
-        pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.12, weight: 1.5, opacity: 0.5 }}
+        pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.12, weight: 1.5, opacity: 0.5, interactive: false }}
       />
       <CircleMarker
         center={[userLocation.lat, userLocation.lng]}
@@ -349,24 +356,24 @@ function UserLocationLayer({ userLocation, radiusMiles }) {
   );
 }
 
-function CenterOnUserButton({ userLocation }) {
+function MapControls({ userLocation }) {
   const map = useMap();
-  if (!userLocation) return null;
+  const btnClass = "w-8 h-8 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors";
   return (
-    <div className="absolute top-3 right-3 z-[999] pointer-events-auto">
-      <button
-        className="w-8 h-8 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors"
-        onClick={() => map.flyTo([userLocation.lat, userLocation.lng], 9)}
-        title="Center on my location"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <line x1="12" y1="2" x2="12" y2="6"/>
-          <line x1="12" y1="18" x2="12" y2="22"/>
-          <line x1="2" y1="12" x2="6" y2="12"/>
-          <line x1="18" y1="12" x2="22" y2="12"/>
-        </svg>
-      </button>
+    <div className="absolute top-3 right-3 z-[999] pointer-events-auto flex flex-col gap-1">
+      <button className={`${btnClass} text-lg font-light leading-none`} onClick={() => map.zoomIn()} title="Zoom in">+</button>
+      <button className={`${btnClass} text-xl font-light leading-none`} onClick={() => map.zoomOut()} title="Zoom out">−</button>
+      {userLocation && (
+        <button className={btnClass} onClick={() => map.flyTo([userLocation.lat, userLocation.lng], 9)} title="Center on my location">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="12" y1="2" x2="12" y2="6"/>
+            <line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="6" y2="12"/>
+            <line x1="18" y1="12" x2="22" y2="12"/>
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -767,19 +774,20 @@ export default function Home() {
       <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-600/50 shadow-lg min-w-0">
         {/* Info panel toggle — top-left of map */}
         <button
-          className="absolute top-3 left-3 z-[999] w-8 h-8 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors pointer-events-auto"
+          className="absolute top-3 left-3 z-[999] w-11 h-16 bg-slate-800/90 border border-slate-600 rounded-lg flex flex-col items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors pointer-events-auto"
           onClick={() => setInfoExpanded((v) => !v)}
           title={infoExpanded ? "Close info panel" : "About stand.partners"}
         >
           {infoExpanded ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           )}
+          <span className="text-[9px] font-medium tracking-wide uppercase leading-none">Info</span>
         </button>
 
         {loading && (
@@ -791,6 +799,7 @@ export default function Home() {
           center={[39.5, -98.35]}
           zoom={4}
           style={{ height: "100%", width: "100%" }}
+          zoomControl={false}
           scrollWheelZoom={true}
           wheelPxPerZoomLevel={120}
           zoomSnap={0.5}
@@ -801,7 +810,7 @@ export default function Home() {
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
           <UserLocationLayer userLocation={userLocation} radiusMiles={radiusMiles} />
-          <CenterOnUserButton userLocation={userLocation} />
+          <MapControls userLocation={userLocation} />
           <MarkerClusterGroup
             chunkedLoading
             maxClusterRadius={40}
