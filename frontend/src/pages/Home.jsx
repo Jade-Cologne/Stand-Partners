@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Circle, CircleMarker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -264,8 +264,9 @@ function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, 
   );
 }
 
-// Cluster list — rendered OUTSIDE MapContainer (fixed position, centered) to avoid animation loops
-function ClusterListFixed({ pins, hoverTimer, closeAll, onSelectPin, pinnedPins, togglePin, navigate }) {
+// Cluster list — positioned above the cluster marker using map coordinates
+function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, pinnedPins, togglePin, navigate }) {
+  const pos = useLatLngPosition(latlng);
   const [hoveredPin, setHoveredPin] = useState(null);
   const hoverPinTimer = useRef(null);
 
@@ -280,8 +281,8 @@ function ClusterListFixed({ pins, hoverTimer, closeAll, onSelectPin, pinnedPins,
 
   return (
     <div
-      className="fixed z-[2000] pointer-events-auto popup-open"
-      style={{ top: "40%", left: `calc(50% - ${PANEL_WIDTH / 2}px)`, transform: "translate(-50%, -50%)" }}
+      className="absolute z-[1000] pointer-events-auto popup-open"
+      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))" }}
       onMouseEnter={() => clearTimeout(hoverTimer.current)}
       onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
     >
@@ -640,6 +641,7 @@ export default function Home() {
     openingsOnly: false,
   });
   const [clusterPins, setClusterPins] = useState(null);
+  const [clusterLatLng, setClusterLatLng] = useState(null);
   const [detailPin, setDetailPin] = useState(null);
   const [closingPin, setClosingPin] = useState(null);
   const [pinnedPins, setPinnedPins] = useState(new Set());
@@ -655,23 +657,26 @@ export default function Home() {
   const closingTimer = useRef(null);
   const activePinEl = useRef(null);
   const activeClusterEl = useRef(null);
+  const closeAllRef = useRef(null);
+  const pinByLatLngRef = useRef({});
   const navigate = useNavigate();
 
-  const setActivePinDom = (el) => {
+  // Stable DOM helpers — refs only, no deps
+  const setActivePinDom = useCallback((el) => {
     if (activePinEl.current && activePinEl.current !== el) {
       activePinEl.current.classList.remove("orch-pin-active");
     }
     activePinEl.current = el || null;
     if (el) el.classList.add("orch-pin-active");
-  };
+  }, []);
 
-  const setActiveClusterDom = (el) => {
+  const setActiveClusterDom = useCallback((el) => {
     if (activeClusterEl.current && activeClusterEl.current !== el) {
       activeClusterEl.current.classList.remove("cluster-badge-active");
     }
     activeClusterEl.current = el || null;
     if (el) el.classList.add("cluster-badge-active");
-  };
+  }, []);
 
   useEffect(() => {
     api.orchestras.mapPins().then(setPins).finally(() => setLoading(false));
@@ -712,19 +717,45 @@ export default function Home() {
     setActivePinDom(null);
     setActiveClusterDom(null);
     setClusterPins(null);
+    setClusterLatLng(null);
     setDetailPin(null);
   };
+  closeAllRef.current = closeAll;
 
-  const showCluster = (e) => {
+  // Keep pinByLatLng accessible in stable callbacks via ref
+  pinByLatLngRef.current = pinByLatLng;
+
+  // Stable handlers — same reference across renders so MarkerClusterGroup
+  // never sees prop changes, which would trigger refreshClusters() and loop the animation
+  const stableShowCluster = useCallback((e) => {
     clearTimeout(hoverTimer.current);
+    setClusterLatLng(e.layer.getLatLng());
     setActiveClusterDom(e.layer.getElement()?.querySelector(".cluster-badge"));
     setActivePinDom(null);
     const found = e.layer.getAllChildMarkers()
-      .map((m) => pinByLatLng[`${m._latlng.lat},${m._latlng.lng}`])
+      .map((m) => pinByLatLngRef.current[`${m._latlng.lat},${m._latlng.lng}`])
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
     if (found.length) { setClusterPins(found); setDetailPin(null); }
-  };
+  }, [setActiveClusterDom, setActivePinDom]);
+
+  const stableClusterMouseOut = useCallback(() => {
+    hoverTimer.current = setTimeout(() => closeAllRef.current?.(), HOVER_CLOSE_MS);
+  }, []);
+
+  const clusterIconCreate = useCallback((cluster) =>
+    L.divIcon({
+      html: `<div class="cluster-badge">${cluster.getChildCount()}</div>`,
+      className: "",
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+    }), []);
+
+  const clusterEventHandlers = useMemo(() => ({
+    clusterclick: stableShowCluster,
+    clustermouseover: stableShowCluster,
+    clustermouseout: stableClusterMouseOut,
+  }), [stableShowCluster, stableClusterMouseOut]);
 
   return (
     <div className="flex gap-3 p-3 bg-slate-900" style={{ height: "calc(100vh - 56px - 41px)" }}>
@@ -766,9 +797,8 @@ export default function Home() {
           zoomDelta={0.5}
         >
           <TileLayer
-            attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-            subdomains={["a", "b", "c"]}
+            attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
           <UserLocationLayer userLocation={userLocation} radiusMiles={radiusMiles} />
           <CenterOnUserButton userLocation={userLocation} />
@@ -776,19 +806,8 @@ export default function Home() {
             chunkedLoading
             maxClusterRadius={40}
             zoomToBoundsOnClick={false}
-            eventHandlers={{
-              clusterclick: showCluster,
-              clustermouseover: showCluster,
-              clustermouseout: () => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); },
-            }}
-            iconCreateFunction={(cluster) =>
-              L.divIcon({
-                html: `<div class="cluster-badge">${cluster.getChildCount()}</div>`,
-                className: "",
-                iconSize: [34, 34],
-                iconAnchor: [17, 17],
-              })
-            }
+            eventHandlers={clusterEventHandlers}
+            iconCreateFunction={clusterIconCreate}
           >
             {unpinnedVisible.map((pin) => (
               <Marker
@@ -865,6 +884,19 @@ export default function Home() {
             <PinnedPopupOverlay key={`popup-${pin.id}`} pin={pin} navigate={navigate} togglePin={togglePin} />
           ))}
 
+          {/* Cluster list — positioned above the cluster marker */}
+          {clusterPins && !detailPin && clusterLatLng && (
+            <ClusterListOverlay
+              pins={clusterPins}
+              latlng={clusterLatLng}
+              hoverTimer={hoverTimer}
+              closeAll={closeAll}
+              onSelectPin={(pin) => { closeAll(); setSidebarPin(pin); setSidebarView("detail"); }}
+              pinnedPins={pinnedPins}
+              togglePin={togglePin}
+              navigate={navigate}
+            />
+          )}
         </MapContainer>
       </div>
 
@@ -891,18 +923,6 @@ export default function Home() {
         navigate={navigate}
       />
 
-      {/* Cluster list — fixed position, outside overflow:hidden map frame */}
-      {clusterPins && !detailPin && (
-        <ClusterListFixed
-          pins={clusterPins}
-          hoverTimer={hoverTimer}
-          closeAll={closeAll}
-          onSelectPin={(pin) => { closeAll(); setSidebarPin(pin); setSidebarView("detail"); }}
-          pinnedPins={pinnedPins}
-          togglePin={togglePin}
-          navigate={navigate}
-        />
-      )}
     </div>
   );
 }

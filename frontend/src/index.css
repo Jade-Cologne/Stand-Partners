@@ -18,7 +18,7 @@ body {
   border-radius: 8px;
 }
 
-/* Darken and slightly desaturate OpenTopoMap tiles */
+/* Voyager: darken + modest hue-rotate to give land a dull olive-green tone */
 .leaflet-tile-pane {
-  filter: brightness(0.72) saturate(0.65) contrast(0.92);
+  filter: brightness(0.70) saturate(0.55) hue-rotate(42deg) contrast(0.90);
 }
