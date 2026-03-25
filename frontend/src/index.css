@@ -18,7 +18,7 @@ body {
   border-radius: 8px;
 }
 
-/* Tone down the Voyager tiles slightly to blend with the dark UI */
+/* Tone down OpenTopoMap tiles to blend with the dark UI */
 .leaflet-tile-pane {
-  filter: brightness(0.76) saturate(0.80) contrast(0.90);
+  filter: brightness(0.80) saturate(0.65) contrast(0.88);
 }
