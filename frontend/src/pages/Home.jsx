@@ -413,13 +413,30 @@ function InfoPanel({ expanded, navigate }) {
           <p>Pins are colored by ensemble type. Diamond shapes indicate open auditions. Hover or click any pin for details.</p>
         </div>
       </div>
-      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-700/60">
+      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-700/60 space-y-2">
         <button
           onClick={() => navigate("/add-ensemble")}
           className="w-full text-center text-sm text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
         >
           Submit an ensemble →
         </button>
+        <div className="border-t border-slate-700/40 pt-2 space-y-1.5">
+          <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Support the project</p>
+          <div className="flex gap-2">
+            <a
+              href="#"
+              className="flex-1 text-center text-xs py-1.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors"
+            >
+              Ko-fi
+            </a>
+            <a
+              href="#"
+              className="flex-1 text-center text-xs py-1.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+            >
+              PayPal
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -877,7 +894,7 @@ export default function Home() {
         )}
         <MapContainer
           center={[39.5, -98.35]}
-          zoom={4}
+          zoom={6}
           style={{ height: "100%", width: "100%" }}
           zoomControl={false}
           scrollWheelZoom={true}
