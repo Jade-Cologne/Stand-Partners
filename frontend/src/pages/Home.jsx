@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Circle, CircleMarker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
@@ -38,6 +38,8 @@ const PAD = 4;
 const SVG_SIZE = 22;
 const ICON_SIZE = SVG_SIZE + PAD * 2;
 const HOVER_CLOSE_MS = 150;
+const CLOSE_ANIM_MS = 130;
+const PANEL_WIDTH = 300;
 
 function createIcon(color, hasAuditions) {
   const svg = hasAuditions
@@ -77,35 +79,34 @@ const PIN_CSS = `
   .cluster-badge:hover { transform: scale(1.35); filter: brightness(0.82); }
   @keyframes popup-in {
     from { opacity: 0; transform: translateY(5px) scale(0.96); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
   }
-  .popup-open {
-    animation: popup-in 0.15s ease-out;
-    transform-origin: bottom center;
+  @keyframes popup-out {
+    from { opacity: 1; transform: translateY(0)   scale(1); }
+    to   { opacity: 0; transform: translateY(5px) scale(0.96); }
   }
+  .popup-open    { animation: popup-in  0.15s ease-out; transform-origin: bottom center; }
+  .popup-closing { animation: popup-out 0.13s ease-in forwards; transform-origin: bottom center; pointer-events: none; }
 `;
 
-// Popup arrow: CSS triangle pointing down toward the pin
 function PopupArrow() {
   return (
     <>
-      {/* Outer (border color) */}
       <div style={{
         position: "absolute", bottom: -7, left: "50%",
         transform: "translateX(-50%)",
         width: 0, height: 0,
         borderLeft: "7px solid transparent",
         borderRight: "7px solid transparent",
-        borderTop: "7px solid #374151",
+        borderTop: "7px solid #4b5563",
       }} />
-      {/* Inner (card bg) */}
       <div style={{
         position: "absolute", bottom: -5, left: "50%",
         transform: "translateX(-50%)",
         width: 0, height: 0,
         borderLeft: "5px solid transparent",
         borderRight: "5px solid transparent",
-        borderTop: "5px solid #111827",
+        borderTop: "5px solid #1f2937",
       }} />
     </>
   );
@@ -123,14 +124,14 @@ function PinIcon({ filled }) {
 function PinCard({ pin, onClose, onBack, navigate, isPinned, onTogglePin }) {
   const hasAuditions = pin.active_audition_count > 0;
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 w-64 relative">
+    <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-4 w-64 relative">
       <div className="flex items-start justify-between mb-1">
         <p className="font-semibold text-gray-100 leading-tight pr-2">{pin.name}</p>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {onTogglePin && (
             <button
               onClick={onTogglePin}
-              className={`transition-colors ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+              className={`transition-colors ${isPinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`}
               title={isPinned ? "Unpin" : "Pin on map"}
             >
               <PinIcon filled={isPinned} />
@@ -166,37 +167,8 @@ function PinCard({ pin, onClose, onBack, navigate, isPinned, onTogglePin }) {
   );
 }
 
-function ClusterList({ pins, onSelect, onClose }) {
-  return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-72 max-h-96 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <p className="font-semibold text-gray-200 text-sm">{pins.length} orchestras</p>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none">×</button>
-      </div>
-      <div className="overflow-y-auto flex-1">
-        {pins.map((pin) => (
-          <button
-            key={pin.id}
-            className="w-full text-left px-4 py-2.5 hover:bg-gray-800 border-b border-gray-800 last:border-0 transition-colors"
-            onClick={() => onSelect(pin)}
-          >
-            <p className="text-sm text-gray-200 leading-tight">{pin.name}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {pin.city}{pin.state ? `, ${pin.state}` : ""}
-              <span className="ml-2 text-gray-600">· {TYPE_LABELS[normalizeType(pin.type)]}</span>
-              {pin.active_audition_count > 0 && (
-                <span className="ml-2 text-indigo-400">· {pin.active_audition_count} open</span>
-              )}
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Always computes position fresh from current map state — no stale position possible
-function usePinPosition(pin) {
+// Shared position hook — recomputes from live map state every render
+function useLatLngPosition(latlng) {
   const map = useMap();
   const [, setTick] = useState(0);
   useMapEvents({
@@ -204,22 +176,26 @@ function usePinPosition(pin) {
     zoom:    () => setTick((n) => n + 1),
     zoomend: () => setTick((n) => n + 1),
   });
-  const p = map.latLngToContainerPoint([pin.lat, pin.lng]);
+  const p = map.latLngToContainerPoint(latlng);
   return { x: p.x, y: p.y };
 }
 
-function PinPopupOverlay({ pin, hoverTimer, closeAll, hasBack, onBack, navigate, pinnedPins, togglePin }) {
+function usePinPosition(pin) {
+  return useLatLngPosition([pin.lat, pin.lng]);
+}
+
+function PinPopupOverlay({ pin, hoverTimer, closeAll, hasBack, onBack, navigate, pinnedPins, togglePin, isClosing = false }) {
   const pos = usePinPosition(pin);
   const isPinned = pinnedPins.has(pin.id);
 
   return (
     <div
-      className="absolute z-[1000] pointer-events-auto"
+      className={`absolute pointer-events-auto ${isClosing ? "z-[999]" : "z-[1000]"}`}
       style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 7px))" }}
-      onMouseEnter={() => clearTimeout(hoverTimer.current)}
-      onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
+      onMouseEnter={isClosing ? undefined : () => clearTimeout(hoverTimer.current)}
+      onMouseLeave={isClosing ? undefined : () => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
     >
-      <div className="popup-open">
+      <div className={isClosing ? "popup-closing" : "popup-open"}>
         <PinCard
           pin={pin}
           onClose={closeAll}
@@ -235,7 +211,6 @@ function PinPopupOverlay({ pin, hoverTimer, closeAll, hasBack, onBack, navigate,
 
 function PinnedPopupOverlay({ pin, navigate, togglePin }) {
   const pos = usePinPosition(pin);
-
   return (
     <div
       className="absolute z-[1001] pointer-events-auto"
@@ -249,6 +224,98 @@ function PinnedPopupOverlay({ pin, navigate, togglePin }) {
           isPinned={true}
           onTogglePin={() => togglePin(pin.id)}
         />
+      </div>
+    </div>
+  );
+}
+
+// Cluster list panel (visual only — no map hooks)
+function ClusterListPanel({ pins, onHoverPin, onSelectPin, onClose, pinnedPins, togglePin }) {
+  return (
+    <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl w-72 max-h-72 flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+        <p className="font-semibold text-gray-200 text-sm">{pins.length} orchestras</p>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none">×</button>
+      </div>
+      <div className="overflow-y-auto flex-1">
+        {pins.map((pin) => (
+          <div
+            key={pin.id}
+            className="flex items-center px-4 py-2.5 hover:bg-gray-700 border-b border-gray-700/60 last:border-0 transition-colors cursor-pointer"
+            onMouseEnter={() => onHoverPin(pin)}
+            onMouseLeave={() => onHoverPin(null)}
+            onClick={() => onSelectPin(pin)}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-200 leading-tight truncate">{pin.name}</p>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                {pin.city}{pin.state ? `, ${pin.state}` : ""}
+                <span className="ml-2 text-gray-600">· {TYPE_LABELS[normalizeType(pin.type)]}</span>
+                {pin.active_audition_count > 0 && (
+                  <span className="ml-2 text-indigo-400">· {pin.active_audition_count} open</span>
+                )}
+              </p>
+            </div>
+            <button
+              className={`ml-3 flex-shrink-0 transition-colors ${pinnedPins.has(pin.id) ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+              onClick={(e) => { e.stopPropagation(); togglePin(pin.id); }}
+              title={pinnedPins.has(pin.id) ? "Unpin" : "Pin on map"}
+            >
+              <PinIcon filled={pinnedPins.has(pin.id)} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Cluster list positioned near the cluster marker, with hover-popup to the right
+function ClusterListOverlay({ pins, latlng, hoverTimer, closeAll, onSelectPin, pinnedPins, togglePin, navigate }) {
+  const pos = useLatLngPosition(latlng);
+  const [hoveredPin, setHoveredPin] = useState(null);
+  const hoverPinTimer = useRef(null);
+
+  const handlePinHover = (pin) => {
+    clearTimeout(hoverPinTimer.current);
+    if (pin) {
+      setHoveredPin(pin);
+    } else {
+      hoverPinTimer.current = setTimeout(() => setHoveredPin(null), HOVER_CLOSE_MS);
+    }
+  };
+
+  return (
+    <div
+      className="absolute z-[1000] pointer-events-auto"
+      style={{ left: pos.x, top: pos.y, transform: "translate(-50%, calc(-100% - 8px))" }}
+      onMouseEnter={() => clearTimeout(hoverTimer.current)}
+      onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
+    >
+      <div className="flex items-start gap-2">
+        <ClusterListPanel
+          pins={pins}
+          onHoverPin={handlePinHover}
+          onSelectPin={onSelectPin}
+          onClose={closeAll}
+          pinnedPins={pinnedPins}
+          togglePin={togglePin}
+        />
+        {hoveredPin && (
+          <div
+            className="popup-open"
+            onMouseEnter={() => clearTimeout(hoverPinTimer.current)}
+            onMouseLeave={() => { hoverPinTimer.current = setTimeout(() => setHoveredPin(null), HOVER_CLOSE_MS); }}
+          >
+            <PinCard
+              pin={hoveredPin}
+              onClose={() => setHoveredPin(null)}
+              navigate={navigate}
+              isPinned={pinnedPins.has(hoveredPin.id)}
+              onTogglePin={() => togglePin(hoveredPin.id)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -287,13 +354,13 @@ function CenterOnUserButton({ userLocation }) {
   const map = useMap();
   if (!userLocation) return null;
   return (
-    <div className="absolute top-4 right-4 z-[999] pointer-events-auto">
+    <div className="absolute top-3 right-3 z-[999] pointer-events-auto">
       <button
-        className="bg-slate-900/90 border border-slate-600 rounded-lg p-2 text-slate-300 hover:text-white hover:bg-slate-800 shadow-lg transition-colors"
+        className="w-8 h-8 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors"
         onClick={() => map.flyTo([userLocation.lat, userLocation.lng], 9)}
         title="Center on my location"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3"/>
           <line x1="12" y1="2" x2="12" y2="6"/>
           <line x1="12" y1="18" x2="12" y2="22"/>
@@ -305,84 +372,46 @@ function CenterOnUserButton({ userLocation }) {
   );
 }
 
-const PANEL_WIDTH = 300;
-
-function InfoPanel({ expanded, setExpanded, navigate }) {
+function InfoPanel({ expanded, navigate }) {
+  if (!expanded) return null;
   return (
     <div
-      className="flex-shrink-0 bg-slate-900/95 border border-slate-700/60 rounded-xl shadow-xl overflow-hidden flex flex-col transition-all duration-200"
-      style={{ width: expanded ? PANEL_WIDTH : 40 }}
+      className="flex-shrink-0 flex flex-col bg-slate-800/95 border border-slate-600/60 rounded-xl shadow-xl overflow-hidden"
+      style={{ width: PANEL_WIDTH }}
     >
-      {!expanded ? (
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 flex-shrink-0">
+        <p className="font-semibold text-slate-200 text-sm">About</p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm text-slate-300">
+        <div>
+          <p className="font-semibold text-slate-100 mb-1">stand.partners</p>
+          <p className="text-slate-400 leading-relaxed">
+            A directory for orchestral musicians. We track audition listings,
+            sub-list information, and excerpt requirements across professional,
+            community, and youth ensembles — updated daily from orchestra websites.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Features</p>
+          <ul className="space-y-1.5 text-slate-400">
+            <li className="flex items-start gap-2"><span className="text-indigo-400 mt-0.5">•</span>Interactive map of 400+ ensembles</li>
+            <li className="flex items-start gap-2"><span className="text-indigo-400 mt-0.5">•</span>Open audition listings with deadlines</li>
+            <li className="flex items-start gap-2"><span className="text-indigo-400 mt-0.5">•</span>Sub-list contacts and procedures</li>
+            <li className="flex items-start gap-2"><span className="text-indigo-400 mt-0.5">•</span>Excerpt library with required PDFs</li>
+          </ul>
+        </div>
+        <div className="border-t border-slate-700/40 pt-3 text-slate-400 text-xs leading-relaxed">
+          <p>Pins are colored by ensemble type. Diamond shapes indicate open auditions. Hover or click any pin for details.</p>
+        </div>
+      </div>
+      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-700/60">
         <button
-          className="flex-1 flex items-center justify-center text-slate-500 hover:text-slate-300 transition-colors"
-          onClick={() => setExpanded(true)}
-          title="About stand.partners"
+          onClick={() => navigate("/add-ensemble")}
+          className="w-full text-center text-sm text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
+          Submit an ensemble →
         </button>
-      ) : (
-        <>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 flex-shrink-0">
-            <p className="font-semibold text-slate-200 text-sm">About</p>
-            <button
-              onClick={() => setExpanded(false)}
-              className="text-slate-500 hover:text-slate-300 text-xl leading-none"
-            >
-              ×
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm text-slate-300">
-            <div>
-              <p className="font-semibold text-slate-100 mb-1">stand.partners</p>
-              <p className="text-slate-400 leading-relaxed">
-                A directory for orchestral musicians. We track audition listings,
-                sub-list information, and excerpt requirements across professional,
-                community, and youth ensembles — updated daily from orchestra websites.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Features</p>
-              <ul className="space-y-1.5 text-slate-400">
-                <li className="flex items-start gap-2">
-                  <span className="text-indigo-400 mt-0.5">•</span>
-                  Interactive map of 400+ ensembles
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-indigo-400 mt-0.5">•</span>
-                  Open audition listings with deadlines
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-indigo-400 mt-0.5">•</span>
-                  Sub-list contacts and procedures
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-indigo-400 mt-0.5">•</span>
-                  Excerpt library with required PDFs
-                </li>
-              </ul>
-            </div>
-            <div className="border-t border-slate-700/40 pt-3 text-slate-400 text-xs leading-relaxed">
-              <p>
-                Pins are colored by ensemble type. Diamond shapes indicate open auditions.
-                Hover or click any pin for details.
-              </p>
-            </div>
-          </div>
-          <div className="flex-shrink-0 px-4 py-3 border-t border-slate-700/60">
-            <button
-              onClick={() => navigate("/add-ensemble")}
-              className="w-full text-center text-sm text-indigo-400 hover:text-indigo-300 hover:underline transition-colors"
-            >
-              Submit an ensemble →
-            </button>
-          </div>
-        </>
-      )}
+      </div>
     </div>
   );
 }
@@ -403,10 +432,7 @@ function SidebarDetail({ pin, onBack, navigate, pinnedPins, togglePin }) {
   const isPinned = pinnedPins.has(pin.id);
   return (
     <div className="p-5">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-4 transition-colors"
-      >
+      <button onClick={onBack} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-4 transition-colors">
         ← Back to list
       </button>
       <div className="flex items-start justify-between mb-2">
@@ -422,9 +448,7 @@ function SidebarDetail({ pin, onBack, navigate, pinnedPins, togglePin }) {
       <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${TYPE_CHIP_CLASSES[typeKey] ?? "bg-gray-700 text-gray-300"}`}>
         {TYPE_LABELS[typeKey]}
       </span>
-      <p className="text-sm text-slate-500 mt-2">
-        {pin.city}{pin.state ? `, ${pin.state}` : ""}
-      </p>
+      <p className="text-sm text-slate-500 mt-2">{pin.city}{pin.state ? `, ${pin.state}` : ""}</p>
       {pin.active_audition_count > 0 ? (
         <span className="inline-block bg-indigo-900 text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-full mt-3">
           {pin.active_audition_count} open audition{pin.active_audition_count !== 1 ? "s" : ""}
@@ -468,29 +492,26 @@ function OrchestraSidebar({
 
   const sorted = useMemo(() => {
     const list = [...pins];
-    if (sort === "az") {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sort === "za") {
-      list.sort((a, b) => b.name.localeCompare(a.name));
-    } else if (sort === "auditions") {
-      list.sort((a, b) => b.active_audition_count - a.active_audition_count || a.name.localeCompare(b.name));
-    } else if (sort === "nearest" && userLocation) {
+    if (sort === "az") list.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === "za") list.sort((a, b) => b.name.localeCompare(a.name));
+    else if (sort === "auditions") list.sort((a, b) => b.active_audition_count - a.active_audition_count || a.name.localeCompare(b.name));
+    else if (sort === "nearest" && userLocation) {
       list.sort((a, b) =>
         haversine(userLocation.lat, userLocation.lng, a.lat, a.lng) -
         haversine(userLocation.lat, userLocation.lng, b.lat, b.lng)
       );
-    } else {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    }
+    } else list.sort((a, b) => a.name.localeCompare(b.name));
     return list;
   }, [pins, sort, userLocation]);
 
   const totalPages = Math.ceil(sorted.length / perPage);
   const pagePins = sorted.slice((page - 1) * perPage, page * perPage);
 
+  const sidebarClass = "flex-shrink-0 bg-slate-800/95 border border-slate-600/60 rounded-xl shadow-xl overflow-hidden";
+
   if (sidebarView === "detail" && sidebarPin) {
     return (
-      <div className="flex-shrink-0 bg-slate-900/95 border border-slate-700/60 rounded-xl shadow-xl overflow-hidden" style={{ width: PANEL_WIDTH }}>
+      <div className={sidebarClass} style={{ width: PANEL_WIDTH }}>
         <SidebarDetail
           pin={sidebarPin}
           onBack={() => setSidebarView("list")}
@@ -503,8 +524,7 @@ function OrchestraSidebar({
   }
 
   return (
-    <div className="flex-shrink-0 flex flex-col bg-slate-900/95 border border-slate-700/60 rounded-xl shadow-xl overflow-hidden" style={{ width: PANEL_WIDTH }}>
-      {/* Filters */}
+    <div className={`${sidebarClass} flex flex-col`} style={{ width: PANEL_WIDTH }}>
       <div className="p-5 border-b border-slate-700/60 space-y-3 flex-shrink-0">
         <p className="font-semibold text-slate-200 text-sm">Filter</p>
         <div>
@@ -537,7 +557,7 @@ function OrchestraSidebar({
         <div className="border-t border-slate-700/40 pt-3 space-y-2">
           <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Sort</p>
           <select
-            className="w-full text-sm bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-slate-200 focus:outline-none"
+            className="w-full text-sm bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-slate-200 focus:outline-none"
             value={sort}
             onChange={(e) => { setSort(e.target.value); setPage(1); }}
           >
@@ -550,56 +570,43 @@ function OrchestraSidebar({
             <div>
               <label className="text-xs text-slate-500 block mb-1">Radius (miles)</label>
               <input
-                type="number"
-                min="10"
-                max="5000"
-                step="10"
+                type="number" min="10" max="5000" step="10"
                 value={radiusMiles}
                 onChange={(e) => setRadiusMiles(Number(e.target.value))}
-                className="w-full text-sm bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-slate-200 focus:outline-none"
+                className="w-full text-sm bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-slate-200 focus:outline-none"
               />
-              {!userLocation && (
-                <p className="text-xs text-amber-500 mt-1">Requesting location…</p>
-              )}
+              {!userLocation && <p className="text-xs text-amber-500 mt-1">Requesting location…</p>}
             </div>
           )}
         </div>
         <div className="border-t border-slate-700/40 pt-3 space-y-1.5">
           <div className="flex items-center gap-2">
-            <svg width="12" height="12" viewBox="0 0 13 13">
-              <circle cx="6.5" cy="6.5" r="5" fill="#94a3b8" fillOpacity="0.65" stroke="white" strokeWidth="1"/>
-            </svg>
+            <svg width="12" height="12" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="5" fill="#94a3b8" fillOpacity="0.65" stroke="white" strokeWidth="1"/></svg>
             <span className="text-xs text-slate-500">No openings</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg width="12" height="12" viewBox="0 0 13 13">
-              <polygon points="6.5,0.5 12.5,6.5 6.5,12.5 0.5,6.5" fill="#94a3b8" stroke="white" strokeWidth="1"/>
-            </svg>
+            <svg width="12" height="12" viewBox="0 0 13 13"><polygon points="6.5,0.5 12.5,6.5 6.5,12.5 0.5,6.5" fill="#94a3b8" stroke="white" strokeWidth="1"/></svg>
             <span className="text-xs text-slate-500">Open auditions</span>
           </div>
         </div>
       </div>
 
-      {/* List header */}
-      <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
+      <div className="px-4 py-2 border-b border-slate-700/60 flex items-center justify-between flex-shrink-0">
         <span className="text-xs text-slate-500">{sorted.length} shown</span>
         <select
-          className="text-xs bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-400 focus:outline-none"
+          className="text-xs bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-slate-400 focus:outline-none"
           value={perPage}
           onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
         >
-          {PER_PAGE_OPTIONS.map((n) => (
-            <option key={n} value={n}>{n} / page</option>
-          ))}
+          {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
         </select>
       </div>
 
-      {/* Orchestra list */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {pagePins.map((pin) => (
           <button
             key={pin.id}
-            className="w-full text-left px-4 py-2.5 hover:bg-slate-800 border-b border-slate-800/60 last:border-0 transition-colors"
+            className="w-full text-left px-4 py-2.5 hover:bg-slate-700 border-b border-slate-700/60 last:border-0 transition-colors"
             onClick={() => { setSidebarPin(pin); setSidebarView("detail"); }}
           >
             <p className="text-sm font-medium text-slate-200 leading-tight truncate">{pin.name}</p>
@@ -610,32 +617,17 @@ function OrchestraSidebar({
                   · {Math.round(haversine(userLocation.lat, userLocation.lng, pin.lat, pin.lng))}mi
                 </span>
               )}
-              {pin.active_audition_count > 0 && (
-                <span className="ml-1 text-indigo-400">· {pin.active_audition_count} open</span>
-              )}
+              {pin.active_audition_count > 0 && <span className="ml-1 text-indigo-400">· {pin.active_audition_count} open</span>}
             </p>
           </button>
         ))}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700/60 flex-shrink-0">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"
-          >
-            ← Prev
-          </button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30">← Prev</button>
           <span className="text-xs text-slate-500">{page} / {totalPages}</span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"
-          >
-            Next →
-          </button>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30">Next →</button>
         </div>
       )}
     </div>
@@ -650,7 +642,9 @@ export default function Home() {
     openingsOnly: false,
   });
   const [clusterPins, setClusterPins] = useState(null);
+  const [clusterLatLng, setClusterLatLng] = useState(null);
   const [detailPin, setDetailPin] = useState(null);
+  const [closingPin, setClosingPin] = useState(null);
   const [pinnedPins, setPinnedPins] = useState(new Set());
   const [sort, setSort] = useState("az");
   const [radiusMiles, setRadiusMiles] = useState(100);
@@ -661,6 +655,7 @@ export default function Home() {
   const [sidebarPin, setSidebarPin] = useState(null);
   const [infoExpanded, setInfoExpanded] = useState(false);
   const hoverTimer = useRef(null);
+  const closingTimer = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -670,8 +665,7 @@ export default function Home() {
   const togglePin = (id) => {
     setPinnedPins((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -691,8 +685,23 @@ export default function Home() {
     return m;
   }, [unpinnedVisible]);
 
+  const startClosingPin = (pin) => {
+    if (!pin || pinnedPins.has(pin.id)) return;
+    clearTimeout(closingTimer.current);
+    setClosingPin(pin);
+    closingTimer.current = setTimeout(() => setClosingPin(null), CLOSE_ANIM_MS);
+  };
+
+  const closeAll = () => {
+    startClosingPin(detailPin);
+    setClusterPins(null);
+    setClusterLatLng(null);
+    setDetailPin(null);
+  };
+
   const showCluster = (e) => {
     clearTimeout(hoverTimer.current);
+    setClusterLatLng(e.layer.getLatLng());
     const found = e.layer.getAllChildMarkers()
       .map((m) => pinByLatLng[`${m._latlng.lat},${m._latlng.lng}`])
       .filter(Boolean)
@@ -700,18 +709,33 @@ export default function Home() {
     if (found.length) { setClusterPins(found); setDetailPin(null); }
   };
 
-  const closeAll = () => { setClusterPins(null); setDetailPin(null); };
-
   return (
-    <div className="flex gap-3 p-3 bg-slate-950" style={{ height: "calc(100vh - 56px - 41px)" }}>
+    <div className="flex gap-3 p-3 bg-slate-900" style={{ height: "calc(100vh - 56px - 41px)" }}>
       <style>{PIN_CSS}</style>
 
-      <InfoPanel expanded={infoExpanded} setExpanded={setInfoExpanded} navigate={navigate} />
+      <InfoPanel expanded={infoExpanded} navigate={navigate} />
 
       {/* Map frame */}
-      <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-700/50 shadow-lg min-w-0">
+      <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-600/50 shadow-lg min-w-0">
+        {/* Info panel toggle — top-left of map */}
+        <button
+          className="absolute top-3 left-3 z-[999] w-8 h-8 bg-slate-800/90 border border-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 shadow-md transition-colors pointer-events-auto"
+          onClick={() => setInfoExpanded((v) => !v)}
+          title={infoExpanded ? "Close info panel" : "About stand.partners"}
+        >
+          {infoExpanded ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          )}
+        </button>
+
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center z-[2000] bg-gray-950/60">
+          <div className="absolute inset-0 flex items-center justify-center z-[2000] bg-slate-900/60">
             <span className="text-gray-400">Loading orchestras...</span>
           </div>
         )}
@@ -748,31 +772,31 @@ export default function Home() {
               })
             }
           >
-            {unpinnedVisible.map((pin) => {
-              const color = TYPE_COLORS[normalizeType(pin.type)];
-              return (
-                <Marker
-                  key={pin.id}
-                  position={[pin.lat, pin.lng]}
-                  icon={createIcon(color, pin.active_audition_count > 0)}
-                  eventHandlers={{
-                    mouseover: () => {
-                      clearTimeout(hoverTimer.current);
-                      setDetailPin(pin);
-                      setClusterPins(null);
-                    },
-                    mouseout: () => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); },
-                    click: () => {
-                      clearTimeout(hoverTimer.current);
-                      setDetailPin(pin);
-                      setClusterPins(null);
-                      setSidebarPin(pin);
-                      setSidebarView("detail");
-                    },
-                  }}
-                />
-              );
-            })}
+            {unpinnedVisible.map((pin) => (
+              <Marker
+                key={pin.id}
+                position={[pin.lat, pin.lng]}
+                icon={createIcon(TYPE_COLORS[normalizeType(pin.type)], pin.active_audition_count > 0)}
+                eventHandlers={{
+                  mouseover: () => {
+                    clearTimeout(hoverTimer.current);
+                    startClosingPin(detailPin?.id !== pin.id ? detailPin : null);
+                    setDetailPin(pin);
+                    setClusterPins(null);
+                    setClusterLatLng(null);
+                  },
+                  mouseout: () => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); },
+                  click: () => {
+                    clearTimeout(hoverTimer.current);
+                    setDetailPin(pin);
+                    setClusterPins(null);
+                    setClusterLatLng(null);
+                    setSidebarPin(pin);
+                    setSidebarView("detail");
+                  },
+                }}
+              />
+            ))}
           </MarkerClusterGroup>
 
           {/* Pinned markers — always visible, never clustered */}
@@ -787,7 +811,23 @@ export default function Home() {
             />
           ))}
 
-          {/* Hover popup — only for unpinned pins */}
+          {/* Closing animation popup (briefly visible while fading out) */}
+          {closingPin && !pinnedPins.has(closingPin.id) && closingPin.id !== detailPin?.id && (
+            <PinPopupOverlay
+              key={`closing-${closingPin.id}`}
+              pin={closingPin}
+              hoverTimer={hoverTimer}
+              closeAll={closeAll}
+              hasBack={false}
+              onBack={null}
+              navigate={navigate}
+              pinnedPins={pinnedPins}
+              togglePin={togglePin}
+              isClosing={true}
+            />
+          )}
+
+          {/* Active hover popup */}
           {detailPin && !pinnedPins.has(detailPin.id) && (
             <PinPopupOverlay
               key={detailPin.id}
@@ -804,24 +844,23 @@ export default function Home() {
 
           {/* Permanent popups for pinned pins */}
           {pinnedVisible.map((pin) => (
-            <PinnedPopupOverlay
-              key={`popup-${pin.id}`}
-              pin={pin}
-              navigate={navigate}
-              togglePin={togglePin}
-            />
+            <PinnedPopupOverlay key={`popup-${pin.id}`} pin={pin} navigate={navigate} togglePin={togglePin} />
           ))}
-        </MapContainer>
 
-        {clusterPins && !detailPin && (
-          <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]"
-            onMouseEnter={() => clearTimeout(hoverTimer.current)}
-            onMouseLeave={() => { hoverTimer.current = setTimeout(closeAll, HOVER_CLOSE_MS); }}
-          >
-            <ClusterList pins={clusterPins} onSelect={(p) => setDetailPin(p)} onClose={closeAll} />
-          </div>
-        )}
+          {/* Cluster list near the cluster */}
+          {clusterPins && !detailPin && clusterLatLng && (
+            <ClusterListOverlay
+              pins={clusterPins}
+              latlng={clusterLatLng}
+              hoverTimer={hoverTimer}
+              closeAll={closeAll}
+              onSelectPin={(pin) => { closeAll(); setSidebarPin(pin); setSidebarView("detail"); }}
+              pinnedPins={pinnedPins}
+              togglePin={togglePin}
+              navigate={navigate}
+            />
+          )}
+        </MapContainer>
       </div>
 
       <OrchestraSidebar

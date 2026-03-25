@@ -15,7 +15,7 @@ function Nav() {
     }`;
 
   return (
-    <header className="bg-slate-950 border-b border-indigo-900/40 sticky top-0 z-[1000]">
+    <header className="bg-slate-900 border-b border-indigo-900/40 sticky top-0 z-[1000]">
       <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 h-14">
         <NavLink to="/" className="font-bold text-indigo-400 text-lg mr-4 hover:text-indigo-300">
           stand.partners
@@ -32,7 +32,7 @@ function Nav() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen bg-slate-950">
+      <div className="flex flex-col min-h-screen bg-slate-900">
         <Nav />
         <main className="flex-1">
           <Routes>
@@ -44,7 +44,7 @@ export default function App() {
             <Route path="/add-ensemble" element={<AddEnsemble />} />
           </Routes>
         </main>
-        <footer className="text-center text-xs text-gray-500 py-4 border-t border-indigo-900/40 bg-slate-950">
+        <footer className="text-center text-xs text-gray-500 py-4 border-t border-indigo-900/40 bg-slate-900">
           stand.partners — audition listings updated daily
         </footer>
       </div>

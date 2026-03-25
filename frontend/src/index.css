@@ -18,7 +18,7 @@ body {
   border-radius: 8px;
 }
 
-/* Tone down the Voyager tiles slightly to blend with the dark UI */
+/* Shift Voyager tiles toward dark faded green */
 .leaflet-tile-pane {
-  filter: brightness(0.86) saturate(0.80) contrast(0.90);
+  filter: brightness(0.72) saturate(0.58) hue-rotate(60deg) contrast(0.86);
 }
