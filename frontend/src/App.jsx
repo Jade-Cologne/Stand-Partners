@@ -5,12 +5,21 @@ import OrchestraDetail from "./pages/OrchestraDetail";
 import Excerpts from "./pages/Excerpts";
 import ExcerptDetail from "./pages/ExcerptDetail";
 import AddEnsemble from "./pages/AddEnsemble";
+import Connect from "./pages/Connect";
+import Gigs from "./pages/Gigs";
 
 function Nav() {
-  const linkClass = ({ isActive }) =>
+  const toolLink = ({ isActive }) =>
     `text-sm font-medium px-3 py-1.5 rounded transition-colors ${
       isActive
         ? "bg-indigo-700 text-white"
+        : "text-gray-400 hover:text-white hover:bg-gray-800"
+    }`;
+
+  const socialLink = ({ isActive }) =>
+    `text-sm font-medium px-3 py-1.5 rounded transition-colors ${
+      isActive
+        ? "bg-emerald-800 text-emerald-100"
         : "text-gray-400 hover:text-white hover:bg-gray-800"
     }`;
 
@@ -20,10 +29,20 @@ function Nav() {
         <NavLink to="/" className="font-bold text-indigo-400 text-lg mr-4 hover:text-indigo-300">
           stand.partners
         </NavLink>
-        <NavLink to="/auditions" className={linkClass}>Auditions</NavLink>
-        <NavLink to="/excerpts" className={linkClass}>Excerpts</NavLink>
+
+        {/* Professional tools */}
+        <NavLink to="/auditions" className={toolLink}>Auditions</NavLink>
+        <NavLink to="/excerpts" className={toolLink}>Excerpts</NavLink>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-slate-700 mx-2" />
+
+        {/* Personal / social */}
+        <NavLink to="/connect" className={socialLink}>Connect</NavLink>
+        <NavLink to="/gigs" className={socialLink}>Gigs</NavLink>
+
         <div className="flex-1" />
-        <NavLink to="/add-ensemble" className={linkClass}>Add Ensemble</NavLink>
+        <NavLink to="/add-ensemble" className={toolLink}>Add Ensemble</NavLink>
       </div>
     </header>
   );
@@ -42,6 +61,8 @@ export default function App() {
             <Route path="/excerpts" element={<Excerpts />} />
             <Route path="/excerpts/:id" element={<ExcerptDetail />} />
             <Route path="/add-ensemble" element={<AddEnsemble />} />
+            <Route path="/connect" element={<Connect />} />
+            <Route path="/gigs" element={<Gigs />} />
           </Routes>
         </main>
         <footer className="text-center text-xs text-gray-500 py-4 border-t border-indigo-900/40 bg-slate-900">
