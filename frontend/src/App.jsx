@@ -7,6 +7,7 @@ import ExcerptDetail from "./pages/ExcerptDetail";
 import AddEnsemble from "./pages/AddEnsemble";
 import Connect from "./pages/Connect";
 import Gigs from "./pages/Gigs";
+import Concerts from "./pages/Concerts";
 
 function Nav() {
   const toolLink = ({ isActive }) =>
@@ -40,6 +41,7 @@ function Nav() {
         {/* Personal / social */}
         <NavLink to="/connect" className={socialLink}>Connect</NavLink>
         <NavLink to="/gigs" className={socialLink}>Gigs</NavLink>
+        <NavLink to="/concerts" className={socialLink}>Concerts</NavLink>
 
         <div className="flex-1" />
         <NavLink to="/add-ensemble" className={toolLink}>Add Ensemble</NavLink>
@@ -63,6 +65,7 @@ export default function App() {
             <Route path="/add-ensemble" element={<AddEnsemble />} />
             <Route path="/connect" element={<Connect />} />
             <Route path="/gigs" element={<Gigs />} />
+            <Route path="/concerts" element={<Concerts />} />
           </Routes>
         </main>
         <footer className="text-center text-xs text-gray-500 py-4 border-t border-indigo-900/40 bg-slate-900">
