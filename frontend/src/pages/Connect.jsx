@@ -16,12 +16,12 @@ const SAMPLE_MUSICIANS = [
   },
   {
     id: 2,
-    name: "Marcus Williams",
+    name: "Greg Paulson",
     instrument: "Cello",
-    location: "New York, NY",
-    level: "Professional",
-    seeking: ["Sub Work", "Piano Trio", "String Quartet"],
-    bio: "Freelance cellist based in Manhattan. Available for sub work on short notice. Happy to read anything.",
+    location: "Minneapolis, MN",
+    level: "Amateur",
+    seeking: ["String Quartet", "Chamber (General)"],
+    bio: "Adult returnee — played through high school, picked it back up two years ago. Around an early intermediate level. Looking for a low-pressure group that meets on weekends.",
     available: true,
   },
   {
@@ -36,12 +36,12 @@ const SAMPLE_MUSICIANS = [
   },
   {
     id: 4,
-    name: "Daniel Torres",
-    instrument: "Viola",
-    location: "Boston, MA",
-    level: "Professional",
-    seeking: ["String Quartet", "Piano Quartet", "Sub Work"],
-    bio: "Principal viola with a regional orchestra. Looking to fill out a quartet with committed, serious players at a similar level.",
+    name: "Priya Nair",
+    instrument: "Violin",
+    location: "Austin, TX",
+    level: "Student",
+    seeking: ["String Quartet", "Chamber (General)"],
+    bio: "Junior in high school, playing for 6 years. Looking for other student players to form a quartet and work toward a local competition.",
     available: true,
   },
   {
@@ -59,9 +59,9 @@ const SAMPLE_MUSICIANS = [
     name: "Robert Hayes",
     instrument: "Horn",
     location: "Houston, TX",
-    level: "Community",
-    seeking: ["Brass Quintet", "Sub Work"],
-    bio: "Amateur horn player, conservatory-trained but currently outside the professional circuit. Looking for a brass quintet for fun.",
+    level: "Amateur",
+    seeking: ["Brass Quintet", "Chamber (General)"],
+    bio: "Software engineer by day. Played horn through college, still at it 15 years later. Looking for a casual brass quintet, no pressure, just fun.",
     available: true,
   },
   {
@@ -76,6 +76,26 @@ const SAMPLE_MUSICIANS = [
   },
   {
     id: 8,
+    name: "Carol Simmons",
+    instrument: "Viola",
+    location: "Portland, OR",
+    level: "Amateur",
+    seeking: ["String Quartet", "Chamber (General)", "Teaching"],
+    bio: "Retired teacher who took up viola at 58. Looking for a patient, beginner-friendly group and possibly a teacher for occasional lessons.",
+    available: true,
+  },
+  {
+    id: 9,
+    name: "David Kim",
+    instrument: "Piano",
+    location: "Boston, MA",
+    level: "Student",
+    seeking: ["Accompanist", "Chamber (General)"],
+    bio: "Berklee student, first year. Looking to get some accompanying experience and meet other chamber players.",
+    available: true,
+  },
+  {
+    id: 10,
     name: "Thomas Reeves",
     instrument: "Bass",
     location: "Chicago, IL",
@@ -88,8 +108,8 @@ const SAMPLE_MUSICIANS = [
 
 const LEVEL_COLORS = {
   Professional: "bg-indigo-900/60 text-indigo-300",
-  Community: "bg-amber-900/60 text-amber-300",
-  Student: "bg-green-900/60 text-green-300",
+  Amateur:      "bg-amber-900/60 text-amber-300",
+  Student:      "bg-green-900/60 text-green-300",
 };
 
 function MusicianCard({ musician }) {
